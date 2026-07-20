@@ -1,0 +1,37 @@
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+.env
+.env.*
+.venv/
+.vscode/
+.cursor/
+
+# Local data exports (not for the repo)
+*.xlsx
+*.xls
+*.csv
+Downloads/
+downloads-auto/
+logs/
+
+# Node / Python local junk
+node_modules/
+package-lock.json
+__pycache__/
+*.pyc
+.venv-eeg/
+
+# Editor / agent skill folders (local only)
+.agents/
+.playwright-cli/
+skills-lock.json
+
+# Agent visual QA captures (local only)
+screenshots/
+night-corridor.png
+night-title.png
+
+# Unused local stimulus PNGs (game uses font glyphs)
+stim/

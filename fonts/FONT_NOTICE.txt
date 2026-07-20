@@ -1,0 +1,8 @@
+Fonts in this folder are served locally with GLYPHMIND for offline use.
+
+- Cinzel, Cinzel Decorative  -  copyright respective authors; SIL Open Font License 1.1.
+  Source: https://fonts.google.com/specimen/Cinzel and Cinzel+Decorative
+- Noto Sans Egyptian Hieroglyphs  -  copyright Google; SIL Open Font License 1.1.
+  Source: https://fonts.google.com/noto/specimen/Noto+Sans+Egyptian+Hieroglyphs
+
+Full license texts: https://openfontlicense.org
