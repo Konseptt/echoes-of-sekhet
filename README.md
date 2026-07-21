@@ -20,7 +20,7 @@ Constants: `TOTAL_TRIALS = 70`, `PRACTICE_TRIALS = 20`, `MATCH_COUNT = 30`.
 | Part | Count | Paintings |
 |------|------:|-----------|
 | Watch-only | N | 1 through N |
-| Scored | 70 − N | N+1 through 70 |
+| Scored | 70 - N | N+1 through 70 |
 | True N-back matches (among all 70) | 30 | set at sequence generation |
 
 The export holds **140 rows** for a full session (70 per block): `warmup` rows for the watch-only paintings, then `scored` rows for the rest.
@@ -41,7 +41,7 @@ flowchart TD
 For scored painting index **i** (where **i ≥ N**):
 
 - Current glyph: `seq[i]`
-- Compare to: `seq[i − N]`
+- Compare to: `seq[i - N]`
 - Same glyph: **MATCH** (left click). Different: **NO MATCH** (right click).
 
 `CRESP` stores the correct code (1 = match, 2 = no match). `ACC` is 1 when `Resp === CRESP`.

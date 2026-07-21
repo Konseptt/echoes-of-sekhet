@@ -229,8 +229,8 @@ function simulateCorridor(sim, N, totalTrials, seed, block) {
     const resp = actualMatch ? 1 : 2;
     const respTime = revealTime + 400;
     const rt = respTime - revealTime;
-    const rsiResp = respTime - lastEventTime;
 
+    // Match game.respond(): keep reveal RSI; only RT is response - reveal.
     logger.record({
       trialIdx: idx,
       n: N,
@@ -238,7 +238,7 @@ function simulateCorridor(sim, N, totalTrials, seed, block) {
       nbackGlyphIdx: seq[idx - N],
       resp,
       rt,
-      rsi: rsiResp,
+      rsi,
       sequenceSeed: seed,
     });
 
@@ -275,12 +275,108 @@ function validateRowLogic(trials) {
         if (row.ACC !== (row.Resp === row.CRESP ? 1 : 0)) {
           issues.push(`t${row.trial} b${row.block} ${tt}: ACC wrong`);
         }
+        if (!(row.RT > 0)) {
+          issues.push(`t${row.trial} b${row.block} ${tt}: answered row needs RT > 0`);
+        }
+      } else if (row.RT !== "" && row.RT != null) {
+        issues.push(`t${row.trial} b${row.block} ${tt}: pending scored row must leave RT blank`);
       }
     }
-    if ((tt === "warmup" || tt === "practice_warmup") && row.CRESP !== "" && row.CRESP != null) {
-      issues.push(`t${row.trial} ${tt}: warmup should leave CRESP blank`);
+    if ((tt === "warmup" || tt === "practice_warmup")) {
+      if (row.CRESP !== "" && row.CRESP != null) {
+        issues.push(`t${row.trial} ${tt}: warmup should leave CRESP blank`);
+      }
+      if (row.RT !== "" && row.RT != null) {
+        issues.push(`t${row.trial} ${tt}: warmup must leave RT blank`);
+      }
+    }
+    if (typeof row.RSI === "number" && row.RSI < 0) {
+      issues.push(`t${row.trial} b${row.block}: negative RSI`);
     }
   }
+  return issues;
+}
+
+/** Mirror index.html reveal/respond/pause timing for RT + RSI. */
+function auditTimingModel() {
+  const issues = [];
+  let lastEventTime = 0;
+  const N = 1;
+  const trials = [];
+
+  function reveal(idx, now) {
+    const rsi = lastEventTime > 0 ? now - lastEventTime : 0;
+    const panel = { idx, revealTime: now, rsi, responded: false };
+    if (idx < N) {
+      lastEventTime = now;
+      trials.push({ trial: idx + 1, type: "warmup", RSI: Math.round(rsi), RT: "" });
+      return panel;
+    }
+    trials.push({
+      trial: idx + 1,
+      type: "scored",
+      RSI: Math.round(rsi),
+      RT: "",
+      revealTime: now,
+      rsi,
+    });
+    return panel;
+  }
+
+  function respond(panel, respTime) {
+    const rt = respTime - panel.revealTime;
+    const row = trials.find((t) => t.trial === panel.idx + 1 && t.type === "scored");
+    row.RT = Math.round(rt);
+    row.RSI = Math.round(panel.rsi || 0);
+    lastEventTime = respTime;
+    panel.responded = true;
+  }
+
+  function pauseDuring(panel, pauseMs) {
+    // resumeGame(): bump active revealTime + lastEventTime so RT excludes pause
+    panel.revealTime += pauseMs;
+    if (lastEventTime > 0) lastEventTime += pauseMs;
+  }
+
+  // Gate 1 observe at t=1000
+  reveal(0, 1000);
+  // Gate 2 scored reveal at t=3000 (RSI = 2000 from observe reveal)
+  const p1 = reveal(1, 3000);
+  // Pause 5000ms while awaiting response
+  pauseDuring(p1, 5000);
+  // Response at wall t=9000; adjusted reveal=8000 → RT=1000
+  respond(p1, 9000);
+  // Gate 3 reveal at t=11000; lastEvent was resp 9000 then +0 = 9000 → RSI=2000
+  const p2 = reveal(2, 11000);
+  respond(p2, 11450);
+
+  if (trials[0].RSI !== 0) issues.push(`warmup RSI expected 0 got ${trials[0].RSI}`);
+  if (trials[0].RT !== "") issues.push("warmup RT must be blank");
+  if (trials[1].RSI !== 2000) issues.push(`scored1 RSI expected 2000 got ${trials[1].RSI}`);
+  if (trials[1].RT !== 1000) issues.push(`scored1 RT expected 1000 (pause excluded) got ${trials[1].RT}`);
+  if (trials[2].RSI !== 2000) issues.push(`scored2 RSI expected 2000 got ${trials[2].RSI}`);
+  if (trials[2].RT !== 450) issues.push(`scored2 RT expected 450 got ${trials[2].RT}`);
+
+  // Simulated corridor from verify-session-data: fixed 400ms RT, 2000ms spacing
+  const sim = makeGameLogger();
+  sim.setPractice(false);
+  simulateCorridor(sim, 1, TOTAL_TRIALS, "gm-v2-timing-rt-rsi", 1);
+  const rows = sim.logger.trials.filter((t) => t.block === 1);
+  const warm = rows.filter((t) => t.trialType === "warmup");
+  const scored = rows.filter((t) => t.trialType === "scored");
+  if (warm.length !== 1) issues.push(`expected 1 warmup got ${warm.length}`);
+  if (warm[0].RSI !== 0) issues.push(`first trial RSI expected 0 got ${warm[0].RSI}`);
+  if (warm[0].RT !== "") issues.push("warmup RT not blank in sim");
+  for (const row of scored) {
+    if (row.RT !== 400) issues.push(`trial ${row.trial} RT expected 400 got ${row.RT}`);
+    if (!(row.RSI >= 0)) issues.push(`trial ${row.trial} negative RSI`);
+  }
+  // After observe at 1000, first scored reveal 3000 → RSI 2000; after resp 3400 next reveal 5000 → RSI 1600
+  const s2 = scored.find((t) => t.trial === 2);
+  const s3 = scored.find((t) => t.trial === 3);
+  if (!s2 || s2.RSI !== 2000) issues.push(`trial 2 RSI expected 2000 got ${s2 && s2.RSI}`);
+  if (!s3 || s3.RSI !== 1600) issues.push(`trial 3 RSI expected 1600 got ${s3 && s3.RSI}`);
+
   return issues;
 }
 
@@ -355,6 +451,9 @@ const audit = auditExportData(trials, {
 }, { strict: true });
 
 ok(audit.ok, `audit export: ${audit.issues.join("; ")}`);
+
+const timingIssues = auditTimingModel();
+ok(timingIssues.length === 0, `RT/RSI timing: ${timingIssues.join("; ")}`);
 
 console.log(failed ? `\n${failed} check(s) failed.` : "\nAll session data checks passed.");
 console.log(`  Rows: ${trials.length} (70 scored per block)`);

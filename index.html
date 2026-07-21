@@ -774,12 +774,31 @@
         font-size: clamp(26px, 5.5vw, 38px);
       }
       .tut-quiz-glyph.tut-quiz-ref {
-        border-color: rgba(200, 155, 70, 0.75);
+        border-color: rgba(245, 192, 82, 0.95);
+        box-shadow: 0 0 0 1px rgba(245, 192, 82, 0.4);
+        background: rgba(28, 20, 8, 0.92);
       }
       .tut-quiz-glyph.tut-quiz-now {
-        border-color: rgba(245, 192, 82, 0.95);
-        background: rgba(18, 12, 4, 0.88);
-        box-shadow: 0 0 14px rgba(245, 142, 26, 0.22);
+        border-color: rgba(245, 210, 120, 1);
+        box-shadow: 0 0 14px rgba(245, 180, 70, 0.35);
+        background: rgba(32, 24, 10, 0.95);
+      }
+      .tut-quiz-tag {
+        display: block;
+        font-size: 0.58em;
+        letter-spacing: 0.14em;
+        color: rgba(230, 190, 110, 0.92);
+        min-height: 1.1em;
+      }
+      .tut-quiz-seq .tut-quiz-glyph {
+        min-width: clamp(60px, 15vw, 78px);
+        padding: 10px 8px 12px;
+        overflow: visible;
+      }
+      .tut-quiz-seq .tut-quiz-ch {
+        font-size: clamp(22px, 4.8vw, 34px);
+        line-height: 1.25;
+        padding: 2px 4px;
       }
       .tut-quiz-prompt {
         font-size: clamp(12px, 1.35vw, 15px);
@@ -3241,7 +3260,7 @@
       renderer.outputEncoding = THREE.sRGBEncoding;
       renderer.sortObjects = false;
       const scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0x1e2848, 52, 195);
+      scene.fog = new THREE.Fog(0x1a2038, 58, 210);
       const cam = new THREE.PerspectiveCamera(72, 1, 0.1, 600);
       cam.position.set(0, 1.78, 3.5);
       let sceneComposer = null;
@@ -3611,37 +3630,167 @@
       }
 
       function makeFloorStone() {
-        const S = 512, cv = document.createElement("canvas");
+        const S = 768,
+          cv = document.createElement("canvas");
         cv.width = cv.height = S;
         const ctx = cv.getContext("2d");
-        ctx.fillStyle = "rgb(146,112,66)";
+        // Base warm limestone wash.
+        const base = ctx.createLinearGradient(0, 0, S, S);
+        base.addColorStop(0, "rgb(168,128,72)");
+        base.addColorStop(0.45, "rgb(142,108,58)");
+        base.addColorStop(1, "rgb(118,88,48)");
+        ctx.fillStyle = base;
         ctx.fillRect(0, 0, S, S);
-        const tiles = 7, ts = S / tiles;
+
+        // Large temple flagstones with bevels + wear.
+        const tiles = 5,
+          ts = S / tiles;
         for (let ty = 0; ty < tiles; ty++) {
           for (let tx = 0; tx < tiles; tx++) {
-            const ox = tx * ts, oy = ty * ts, br = 118 + ((tx * 17 + ty * 23) % 34);
+            const ox = tx * ts,
+              oy = ty * ts;
+            const jitter = ((tx * 19 + ty * 29) % 9) - 4;
+            const inset = 7 + (tx + ty) % 3;
+            const br = 128 + ((tx * 17 + ty * 23) % 38) + jitter;
             const gg = ctx.createLinearGradient(ox, oy, ox + ts, oy + ts);
-            gg.addColorStop(0, `rgb(${br + 52},${br + 24},${br - 30})`);
-            gg.addColorStop(1, `rgb(${br},${br - 26},${br - 66})`);
+            gg.addColorStop(0, `rgb(${br + 58},${br + 28},${br - 22})`);
+            gg.addColorStop(0.45, `rgb(${br + 22},${br - 2},${br - 48})`);
+            gg.addColorStop(1, `rgb(${br - 8},${br - 32},${br - 72})`);
             ctx.fillStyle = gg;
-            ctx.fillRect(ox + 5, oy + 5, ts - 10, ts - 10);
+            ctx.fillRect(ox + inset, oy + inset, ts - inset * 2, ts - inset * 2);
+            // Soft bevel highlight on top-left of each flag.
+            const bevel = ctx.createLinearGradient(ox + inset, oy + inset, ox + ts * 0.55, oy + ts * 0.55);
+            bevel.addColorStop(0, "rgba(255,230,170,0.18)");
+            bevel.addColorStop(0.4, "rgba(255,230,170,0.04)");
+            bevel.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = bevel;
+            ctx.fillRect(ox + inset, oy + inset, ts - inset * 2, ts - inset * 2);
+            // Hairline cracks on some tiles.
+            if ((tx * 3 + ty * 5) % 4 === 0) {
+              ctx.strokeStyle = "rgba(60,40,18,0.28)";
+              ctx.lineWidth = 1.2;
+              ctx.beginPath();
+              ctx.moveTo(ox + inset + 8, oy + ts * 0.35);
+              ctx.lineTo(ox + ts * 0.55, oy + inset + 12);
+              ctx.lineTo(ox + ts - inset - 10, oy + ts * 0.7);
+              ctx.stroke();
+            }
           }
         }
-        // Sand drifts blown across the paving
-        for (let i = 0; i < 26; i++) {
-          const sx = (i * 97) % S, sy = (i * 151) % S;
-          const drift = ctx.createRadialGradient(sx, sy, 2, sx, sy, 26 + (i % 4) * 14);
-          drift.addColorStop(0, "rgba(226,190,128,.5)");
-          drift.addColorStop(1, "rgba(226,190,128,0)");
-          ctx.fillStyle = drift;
-          ctx.fillRect(sx - 60, sy - 60, 120, 120);
-        }
-        ctx.strokeStyle = "rgba(74,52,24,.55)";
-        ctx.lineWidth = 3;
+
+        // Deep mortar joints.
+        ctx.strokeStyle = "rgba(48,32,14,0.72)";
+        ctx.lineWidth = 5;
         for (let i = 0; i <= tiles; i++) {
-          ctx.beginPath(); ctx.moveTo(i * ts, 0); ctx.lineTo(i * ts, S); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(0, i * ts); ctx.lineTo(S, i * ts); ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(i * ts, 0);
+          ctx.lineTo(i * ts, S);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(0, i * ts);
+          ctx.lineTo(S, i * ts);
+          ctx.stroke();
         }
+        ctx.strokeStyle = "rgba(210,170,100,0.12)";
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i <= tiles; i++) {
+          ctx.beginPath();
+          ctx.moveTo(i * ts + 2, 0);
+          ctx.lineTo(i * ts + 2, S);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(0, i * ts + 2);
+          ctx.lineTo(S, i * ts + 2);
+          ctx.stroke();
+        }
+
+        // Sand drifts + grit in joints.
+        for (let i = 0; i < 42; i++) {
+          const sx = (i * 97) % S,
+            sy = (i * 151) % S;
+          const drift = ctx.createRadialGradient(sx, sy, 2, sx, sy, 22 + (i % 5) * 16);
+          drift.addColorStop(0, `rgba(232,198,132,${0.28 + (i % 3) * 0.1})`);
+          drift.addColorStop(1, "rgba(232,198,132,0)");
+          ctx.fillStyle = drift;
+          ctx.fillRect(sx - 70, sy - 70, 140, 140);
+        }
+        const id = ctx.getImageData(0, 0, S, S),
+          d = id.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const n = (Math.random() - 0.5) * 14;
+          d[i] = Math.max(0, Math.min(255, d[i] + n));
+          d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n * 0.78));
+          d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + n * 0.42));
+        }
+        ctx.putImageData(id, 0, 0);
+        return texFinish(new THREE.CanvasTexture(cv));
+      }
+
+      function makeGateRing() {
+        const S = 768,
+          cv = document.createElement("canvas");
+        cv.width = cv.height = S;
+        const ctx = cv.getContext("2d");
+        const cx = S / 2,
+          cy = S / 2;
+        // Warm sandstone disc base.
+        const disc = ctx.createRadialGradient(cx - S * 0.12, cy - S * 0.14, S * 0.05, cx, cy, S * 0.55);
+        disc.addColorStop(0, "rgb(236,198,118)");
+        disc.addColorStop(0.35, "rgb(204,158,78)");
+        disc.addColorStop(0.7, "rgb(168,122,56)");
+        disc.addColorStop(1, "rgb(120,84,40)");
+        ctx.fillStyle = disc;
+        ctx.fillRect(0, 0, S, S);
+
+        // Concentric carved grooves.
+        for (let r = 0; r < 9; r++) {
+          const rad = S * (0.18 + r * 0.04);
+          ctx.strokeStyle = `rgba(70,48,18,${0.16 + (r % 3) * 0.05})`;
+          ctx.lineWidth = 2 + (r % 2);
+          ctx.beginPath();
+          ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(255,220,150,${0.05 + (r % 2) * 0.04})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(cx - 1, cy - 1, rad, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Gold leaf band near the inner aperture.
+        const band = ctx.createRadialGradient(cx, cy, S * 0.2, cx, cy, S * 0.34);
+        band.addColorStop(0, "rgba(255,210,110,0)");
+        band.addColorStop(0.45, "rgba(255,200,90,0.35)");
+        band.addColorStop(0.72, "rgba(220,160,60,0.22)");
+        band.addColorStop(1, "rgba(160,110,40,0)");
+        ctx.fillStyle = band;
+        ctx.beginPath();
+        ctx.arc(cx, cy, S * 0.34, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Radial tick marks (temple calendar / rope motif).
+        for (let i = 0; i < 48; i++) {
+          const a = (i / 48) * Math.PI * 2;
+          const r0 = S * (0.36 + (i % 3) * 0.01);
+          const r1 = S * (0.46 + (i % 2) * 0.02);
+          ctx.strokeStyle = i % 4 === 0 ? "rgba(255,220,140,0.28)" : "rgba(80,55,22,0.22)";
+          ctx.lineWidth = i % 4 === 0 ? 2.2 : 1.2;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+          ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+          ctx.stroke();
+        }
+
+        // Speckle / stone grain.
+        const id = ctx.getImageData(0, 0, S, S),
+          d = id.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const n = (Math.random() - 0.5) * 18;
+          d[i] = Math.max(0, Math.min(255, d[i] + n));
+          d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n * 0.8));
+          d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + n * 0.45));
+        }
+        ctx.putImageData(id, 0, 0);
         return texFinish(new THREE.CanvasTexture(cv));
       }
 
@@ -3813,6 +3962,7 @@
         arena: makeWallStone(),
         goldstone: makeGoldenSandstone(),
         templeWall: makeTempleWall(),
+        gateRing: makeGateRing(),
       };
 
       const BUMP_WALL = makeBumpNoise(256, 34),
@@ -3910,6 +4060,24 @@
         });
       }
 
+      function corridorFloorMat(rx, ry, opts = {}) {
+        const map = TX.floor.clone();
+        map.repeat.set(rx, ry);
+        map.needsUpdate = true;
+        const bump = BUMP_FLOOR.clone();
+        bump.repeat.set(rx * 1.2, ry * 1.2);
+        bump.needsUpdate = true;
+        return new THREE.MeshStandardMaterial({
+          color: opts.color ?? 0xd4a860,
+          map,
+          bumpMap: bump,
+          bumpScale: opts.bumpScale ?? 0.085,
+          roughness: opts.roughness ?? 0.9,
+          metalness: opts.metalness ?? 0.02,
+          emissive: opts.emissive ?? 0x100c06,
+        });
+      }
+
       function corridorStoneMat(rx, ry, opts = {}) {
         const map = TX.goldstone.clone();
         map.repeat.set(rx, ry);
@@ -3936,38 +4104,77 @@
         });
       }
 
-      const GLYPH_PLANE_SIZE = 3.5;
+      const GLYPH_PLANE_SIZE = 3.2;
 
-      function measureGlyphLayout(ctx, S, ch) {
-        const pad = Math.max(8, Math.floor(S * 0.06));
-        const maxBox = S - pad * 2;
-        let fs = Math.floor(S * 0.82);
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        for (let step = 0; step < 20; step++) {
-          ctx.font = `${fs}px ${GLYPH_FONT}`;
-          const m = ctx.measureText(ch);
-          const asc = m.actualBoundingBoxAscent != null ? m.actualBoundingBoxAscent : fs * 0.62;
-          const desc = m.actualBoundingBoxDescent != null ? m.actualBoundingBoxDescent : fs * 0.38;
-          if (m.width <= maxBox && asc + desc <= maxBox) break;
-          fs = Math.max(Math.floor(fs * 0.9), Math.floor(S * 0.22));
+      function glyphInkBounds(ctx, S, alphaMin = 8) {
+        const { data } = ctx.getImageData(0, 0, S, S);
+        let minX = S,
+          minY = S,
+          maxX = -1,
+          maxY = -1;
+        for (let y = 0; y < S; y++) {
+          const row = y * S * 4;
+          for (let x = 0; x < S; x++) {
+            if (data[row + x * 4 + 3] > alphaMin) {
+              if (x < minX) minX = x;
+              if (y < minY) minY = y;
+              if (x > maxX) maxX = x;
+              if (y > maxY) maxY = y;
+            }
+          }
         }
-        ctx.font = `${fs}px ${GLYPH_FONT}`;
-        const m = ctx.measureText(ch);
-        const asc = m.actualBoundingBoxAscent != null ? m.actualBoundingBoxAscent : fs * 0.62;
-        const desc = m.actualBoundingBoxDescent != null ? m.actualBoundingBoxDescent : fs * 0.38;
-        let yPos = S * 0.5 + (asc - desc) * 0.5;
-        yPos = Math.min(S - pad - desc * 0.15, Math.max(pad + asc * 0.15, yPos));
-        return { fs, yPos };
+        if (maxX < 0) return null;
+        return { minX, minY, maxX, maxY, w: maxX - minX + 1, h: maxY - minY + 1 };
       }
 
       function drawGlyphTexture(ctx, S, gi) {
-        ctx.clearRect(0, 0, S, S);
         const ch = GLYPHS[gi].ch;
-        const { fs, yPos } = measureGlyphLayout(ctx, S, ch);
-        ctx.font = `${fs}px ${GLYPH_FONT}`;
-        ctx.fillStyle = EEG_FOCUSED_MODE ? "#f2ebe0" : "#ffe8b8";
-        ctx.fillText(ch, S / 2, yPos);
+        const color = EEG_FOCUSED_MODE ? "#f2ebe0" : "#ffe8b8";
+        // Oversized draft so tall/wide hieroglyphs never clip before ink measure.
+        const DS = S * 3;
+        const draft = document.createElement("canvas");
+        draft.width = draft.height = DS;
+        const dctx = draft.getContext("2d");
+        dctx.clearRect(0, 0, DS, DS);
+        dctx.textAlign = "center";
+        dctx.textBaseline = "middle";
+        dctx.font = `${Math.floor(DS * 0.42)}px ${GLYPH_FONT}`;
+        dctx.fillStyle = color;
+        dctx.fillText(ch, DS / 2, DS / 2);
+
+        const bounds = glyphInkBounds(dctx, DS, 6);
+        ctx.clearRect(0, 0, S, S);
+        if (!bounds) {
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.font = `${Math.floor(S * 0.48)}px ${GLYPH_FONT}`;
+          ctx.fillStyle = color;
+          ctx.fillText(ch, S / 2, S / 2);
+          return;
+        }
+
+        // Fit fully inside inscribed circle of the square (circular ring aperture).
+        const maxDim = S * 0.66;
+        const scale = Math.min(maxDim / bounds.w, maxDim / bounds.h);
+        const tmp = document.createElement("canvas");
+        tmp.width = bounds.w;
+        tmp.height = bounds.h;
+        tmp.getContext("2d").drawImage(
+          draft,
+          bounds.minX,
+          bounds.minY,
+          bounds.w,
+          bounds.h,
+          0,
+          0,
+          bounds.w,
+          bounds.h,
+        );
+        const dw = Math.max(1, bounds.w * scale);
+        const dh = Math.max(1, bounds.h * scale);
+        ctx.imageSmoothingEnabled = true;
+        if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(tmp, (S - dw) / 2, (S - dh) / 2, dw, dh);
       }
 
       function hidePanelGlyph(p) {
@@ -4025,16 +4232,16 @@
         return x - Math.floor(x);
       }
 
-      // corridor mesh - walkway width matches the memory gate ring
-      const RING_OUTER_R = 2.23;
-      const GATE_INNER_W = RING_OUTER_R * 2 + 0.1;
-      const CW = GATE_INNER_W + 0.34,
-        CH = 8.45;
-      const PAINT_Z0 = 5.75,
-        PAINT_SPACING = 5.5,
-        CORRIDOR_TAIL = 14,
-        REVEAL_DIST = 4.8,
-        GATE_FORWARD_BLOCK = 2.35;
+      // corridor mesh - wider / taller hall; walkway width matches the memory gate ring
+      const RING_OUTER_R = 2.85;
+      const GATE_INNER_W = RING_OUTER_R * 2 + 0.14;
+      const CW = GATE_INNER_W + 0.42,
+        CH = 10.8;
+      const PAINT_Z0 = 6.4,
+        PAINT_SPACING = 7.2,
+        CORRIDOR_TAIL = 18,
+        REVEAL_DIST = 6.2,
+        GATE_FORWARD_BLOCK = 3.0;
       let worldGrp = null;
       const DM = new THREE.Object3D();
 
@@ -4057,81 +4264,162 @@
         const skyCanvas = document.createElement("canvas");
         skyCanvas.width = skyCanvas.height = S;
         const skyCtx = skyCanvas.getContext("2d");
+        // Zenith → desert horizon: deep indigo into warm amber sand-glow.
         const skyGrad = skyCtx.createLinearGradient(0, 0, 0, S);
-        skyGrad.addColorStop(0, "#040612");
-        skyGrad.addColorStop(0.18, "#0a1030");
-        skyGrad.addColorStop(0.38, "#101c48");
-        skyGrad.addColorStop(0.58, "#162a58");
-        skyGrad.addColorStop(0.78, "#1e2850");
-        skyGrad.addColorStop(0.9, "#3a3040");
-        skyGrad.addColorStop(0.97, "#5a4830");
-        skyGrad.addColorStop(1, "#6a5538");
+        skyGrad.addColorStop(0, "#02040e");
+        skyGrad.addColorStop(0.12, "#070d28");
+        skyGrad.addColorStop(0.28, "#0c1842");
+        skyGrad.addColorStop(0.45, "#122456");
+        skyGrad.addColorStop(0.62, "#1a2e5c");
+        skyGrad.addColorStop(0.76, "#243050");
+        skyGrad.addColorStop(0.86, "#3a2e48");
+        skyGrad.addColorStop(0.92, "#5a4038");
+        skyGrad.addColorStop(0.965, "#8a6840");
+        skyGrad.addColorStop(1, "#c09058");
         skyCtx.fillStyle = skyGrad;
         skyCtx.fillRect(0, 0, S, S);
-        // Deep nebula clouds (hash-placed, static).
-        for (let n = 0; n < 14; n++) {
+
+        // Soft horizon bloom (desert afterglow).
+        const hz = skyCtx.createRadialGradient(S * 0.52, S * 0.98, 4, S * 0.52, S * 0.98, S * 0.55);
+        hz.addColorStop(0, "rgba(255,190,110,0.28)");
+        hz.addColorStop(0.35, "rgba(200,130,80,0.12)");
+        hz.addColorStop(0.7, "rgba(120,70,90,0.05)");
+        hz.addColorStop(1, "rgba(40,30,60,0)");
+        skyCtx.fillStyle = hz;
+        skyCtx.fillRect(0, S * 0.55, S, S * 0.45);
+
+        // Layered nebula veils.
+        for (let n = 0; n < 22; n++) {
           const nx = skyHash(n * 19 + 2) * S;
-          const ny = skyHash(n * 23 + 5) * S * 0.72;
-          const nr = 80 + skyHash(n * 31 + 7) * 220;
-          const hue = n % 4;
+          const ny = skyHash(n * 23 + 5) * S * 0.68;
+          const nr = (90 + skyHash(n * 31 + 7) * 280) * (S / 2048);
+          const hue = n % 5;
           const rgb =
-            hue === 0 ? "90,70,180" : hue === 1 ? "60,100,200" : hue === 2 ? "120,80,170" : "70,140,190";
-          const neb = skyCtx.createRadialGradient(nx, ny, 4, nx, ny, nr);
-          neb.addColorStop(0, `rgba(${rgb},0.14)`);
-          neb.addColorStop(0.45, `rgba(${rgb},0.06)`);
+            hue === 0
+              ? "95,75,200"
+              : hue === 1
+                ? "55,110,210"
+                : hue === 2
+                  ? "140,85,180"
+                  : hue === 3
+                    ? "70,150,200"
+                    : "110,95,170";
+          const neb = skyCtx.createRadialGradient(nx, ny, 2, nx, ny, nr);
+          neb.addColorStop(0, `rgba(${rgb},${0.1 + skyHash(n * 7) * 0.08})`);
+          neb.addColorStop(0.4, `rgba(${rgb},0.05)`);
           neb.addColorStop(1, `rgba(${rgb},0)`);
           skyCtx.fillStyle = neb;
           skyCtx.fillRect(nx - nr, ny - nr, nr * 2, nr * 2);
         }
-        // Milky Way band.
+
+        // Milky Way: soft band + dusty core + dark lanes.
         skyCtx.save();
-        skyCtx.translate(S / 2, S / 2);
-        skyCtx.rotate(-0.38);
-        const mw = skyCtx.createLinearGradient(-S * 0.42, 0, S * 0.42, 0);
-        mw.addColorStop(0, "rgba(150,130,220,0)");
-        mw.addColorStop(0.32, "rgba(120,100,200,0.09)");
-        mw.addColorStop(0.5, "rgba(200,180,255,0.16)");
-        mw.addColorStop(0.68, "rgba(110,90,190,0.08)");
-        mw.addColorStop(1, "rgba(150,130,220,0)");
+        skyCtx.translate(S / 2, S * 0.42);
+        skyCtx.rotate(-0.42);
+        const mwW = S * 0.95;
+        const mwH = S * 0.34;
+        const mw = skyCtx.createLinearGradient(-mwW * 0.5, 0, mwW * 0.5, 0);
+        mw.addColorStop(0, "rgba(160,140,230,0)");
+        mw.addColorStop(0.22, "rgba(130,110,210,0.07)");
+        mw.addColorStop(0.4, "rgba(210,195,255,0.18)");
+        mw.addColorStop(0.5, "rgba(245,235,255,0.24)");
+        mw.addColorStop(0.6, "rgba(200,180,250,0.16)");
+        mw.addColorStop(0.78, "rgba(120,100,200,0.07)");
+        mw.addColorStop(1, "rgba(160,140,230,0)");
         skyCtx.fillStyle = mw;
-        skyCtx.fillRect(-S / 2, -S * 0.14, S, S * 0.28);
+        skyCtx.fillRect(-mwW * 0.5, -mwH * 0.5, mwW, mwH);
+        // Dust mottling along the band.
+        for (let d = 0; d < 90; d++) {
+          const dx = (skyHash(d * 37 + 1) - 0.5) * mwW * 0.9;
+          const dy = (skyHash(d * 41 + 3) - 0.5) * mwH * 0.7;
+          const dr = (8 + skyHash(d * 43) * 36) * (S / 2048);
+          const dust = skyCtx.createRadialGradient(dx, dy, 0, dx, dy, dr);
+          const bright = skyHash(d * 47) > 0.55;
+          dust.addColorStop(
+            0,
+            bright ? `rgba(230,220,255,${0.04 + skyHash(d) * 0.06})` : `rgba(20,16,40,${0.05 + skyHash(d) * 0.07})`,
+          );
+          dust.addColorStop(1, "rgba(0,0,0,0)");
+          skyCtx.fillStyle = dust;
+          skyCtx.beginPath();
+          skyCtx.arc(dx, dy, dr, 0, Math.PI * 2);
+          skyCtx.fill();
+        }
         skyCtx.restore();
-        // Aurora wisps at the zenith.
-        for (let a = 0; a < 6; a++) {
+
+        // Faint zenith color wisps (cool teal / violet, not loud aurora).
+        for (let a = 0; a < 8; a++) {
           const ax = skyHash(a * 41 + 1) * S;
-          const ay = skyHash(a * 53 + 3) * S * 0.35;
-          const aur = skyCtx.createRadialGradient(ax, ay, 6, ax, ay, 140 + a * 28);
-          const hue = a % 3 === 0 ? "100,220,190" : a % 3 === 1 ? "150,110,230" : "80,170,230";
-          aur.addColorStop(0, `rgba(${hue},0.11)`);
-          aur.addColorStop(0.55, `rgba(${hue},0.04)`);
+          const ay = skyHash(a * 53 + 3) * S * 0.32;
+          const ar = (120 + a * 22) * (S / 2048);
+          const aur = skyCtx.createRadialGradient(ax, ay, 4, ax, ay, ar);
+          const hue = a % 3 === 0 ? "90,210,200" : a % 3 === 1 ? "150,120,235" : "85,165,230";
+          aur.addColorStop(0, `rgba(${hue},0.09)`);
+          aur.addColorStop(0.5, `rgba(${hue},0.035)`);
           aur.addColorStop(1, `rgba(${hue},0)`);
           skyCtx.fillStyle = aur;
-          skyCtx.fillRect(ax - 180, ay - 140, 360, 280);
+          skyCtx.fillRect(ax - ar, ay - ar * 0.8, ar * 2, ar * 1.6);
         }
-        // Star field with diffraction spikes on the brightest few.
-        const starCount = 1680;
+
+        // Dense star field: tiny dust → bright jewels with soft halos.
+        const starCount = 3200;
         const scale = S / 1024;
         for (let i = 0; i < starCount; i++) {
           const x = Math.floor(skyHash(i * 3 + 1) * S);
-          const y = Math.floor(skyHash(i * 7 + 3) * S * 0.78);
-          const br = 0.22 + skyHash(i * 11 + 5) * 0.72;
+          const y = Math.floor(skyHash(i * 7 + 3) * S * 0.88);
+          // Fewer stars near warm horizon so they do not fight the glow.
+          const horizonFade = y > S * 0.82 ? Math.max(0.15, 1 - (y / S - 0.82) * 4) : 1;
+          const br = (0.18 + skyHash(i * 11 + 5) * 0.78) * horizonFade;
           const tint = skyHash(i * 17 + 9);
-          const r = tint > 0.97 ? 2.4 * scale : tint > 0.9 ? 1.7 * scale : tint > 0.55 ? 1.1 * scale : 0.7 * scale;
-          const starR = tint > 0.75 ? 255 : 215 + Math.floor(tint * 40);
-          const starG = tint > 0.75 ? 245 + Math.floor(tint * 10) : 220 + Math.floor(tint * 30);
-          skyCtx.fillStyle = `rgba(${starR},${starG},255,${br})`;
+          const r =
+            tint > 0.985
+              ? 2.8 * scale
+              : tint > 0.94
+                ? 1.9 * scale
+                : tint > 0.7
+                  ? 1.15 * scale
+                  : tint > 0.35
+                    ? 0.75 * scale
+                    : 0.45 * scale;
+          // Warm / cool star color mix.
+          let starR, starG, starB;
+          if (tint > 0.88) {
+            starR = 255;
+            starG = 248;
+            starB = 255;
+          } else if (tint > 0.62) {
+            starR = 210 + Math.floor(tint * 40);
+            starG = 225 + Math.floor(tint * 25);
+            starB = 255;
+          } else if (tint < 0.18) {
+            starR = 255;
+            starG = 220 + Math.floor(tint * 80);
+            starB = 190;
+          } else {
+            starR = 200 + Math.floor(tint * 40);
+            starG = 210 + Math.floor(tint * 35);
+            starB = 245;
+          }
+          if (tint > 0.96) {
+            const halo = skyCtx.createRadialGradient(x, y, 0, x, y, r * 5);
+            halo.addColorStop(0, `rgba(${starR},${starG},${starB},${br * 0.35})`);
+            halo.addColorStop(1, `rgba(${starR},${starG},${starB},0)`);
+            skyCtx.fillStyle = halo;
+            skyCtx.fillRect(x - r * 5, y - r * 5, r * 10, r * 10);
+          }
+          skyCtx.fillStyle = `rgba(${starR},${starG},${starB},${br})`;
           skyCtx.beginPath();
           skyCtx.arc(x, y, r, 0, Math.PI * 2);
           skyCtx.fill();
-          if (tint > 0.985) {
-            skyCtx.strokeStyle = `rgba(220,235,255,${br * 0.45})`;
-            skyCtx.lineWidth = 0.8 * scale;
-            const spike = 5 + skyHash(i * 29) * 10;
+          if (tint > 0.988) {
+            skyCtx.strokeStyle = `rgba(230,240,255,${br * 0.4})`;
+            skyCtx.lineWidth = 0.7 * scale;
+            const spike = (6 + skyHash(i * 29) * 12) * scale;
             skyCtx.beginPath();
             skyCtx.moveTo(x - spike, y);
             skyCtx.lineTo(x + spike, y);
-            skyCtx.moveTo(x, y - spike * 0.7);
-            skyCtx.lineTo(x, y + spike * 0.7);
+            skyCtx.moveTo(x, y - spike * 0.75);
+            skyCtx.lineTo(x, y + spike * 0.75);
             skyCtx.stroke();
           }
         }
@@ -4142,37 +4430,52 @@
         const moonCanvas = document.createElement("canvas");
         moonCanvas.width = moonCanvas.height = S;
         const moonCtx = moonCanvas.getContext("2d");
-        const moonGlow = moonCtx.createRadialGradient(S / 2, S / 2, S * 0.02, S / 2, S / 2, S * 0.5);
-        moonGlow.addColorStop(0, "rgba(255,255,252,1)");
-        moonGlow.addColorStop(0.08, "rgba(245,248,255,.99)");
-        moonGlow.addColorStop(0.14, "rgba(235,242,255,.96)");
-        moonGlow.addColorStop(0.22, "rgba(190,210,250,.72)");
-        moonGlow.addColorStop(0.42, "rgba(130,165,230,.28)");
-        moonGlow.addColorStop(0.65, "rgba(100,140,210,.1)");
-        moonGlow.addColorStop(1, "rgba(100,140,210,0)");
-        moonCtx.fillStyle = moonGlow;
+        // Large soft corona.
+        const corona = moonCtx.createRadialGradient(S / 2, S / 2, S * 0.06, S / 2, S / 2, S * 0.5);
+        corona.addColorStop(0, "rgba(255,255,250,0)");
+        corona.addColorStop(0.12, "rgba(245,248,255,0)");
+        corona.addColorStop(0.18, "rgba(230,238,255,0.55)");
+        corona.addColorStop(0.32, "rgba(180,205,245,0.28)");
+        corona.addColorStop(0.55, "rgba(130,165,230,0.1)");
+        corona.addColorStop(1, "rgba(90,130,200,0)");
+        moonCtx.fillStyle = corona;
         moonCtx.fillRect(0, 0, S, S);
-        for (let c = 0; c < 28; c++) {
-          const cx = S * (0.28 + skyHash(c * 7 + 1) * 0.44);
-          const cy = S * (0.28 + skyHash(c * 11 + 3) * 0.44);
-          const cr = 4 + skyHash(c * 13 + 5) * 22;
+        // Bright lunar disc.
+        const discR = S * 0.145;
+        const moonGlow = moonCtx.createRadialGradient(S / 2, S / 2, discR * 0.05, S / 2, S / 2, discR);
+        moonGlow.addColorStop(0, "rgba(255,255,252,1)");
+        moonGlow.addColorStop(0.35, "rgba(248,250,255,1)");
+        moonGlow.addColorStop(0.7, "rgba(230,238,250,0.98)");
+        moonGlow.addColorStop(0.9, "rgba(200,215,240,0.92)");
+        moonGlow.addColorStop(1, "rgba(170,190,225,0.55)");
+        moonCtx.fillStyle = moonGlow;
+        moonCtx.beginPath();
+        moonCtx.arc(S / 2, S / 2, discR, 0, Math.PI * 2);
+        moonCtx.fill();
+        // Maria (dark seas).
+        for (let c = 0; c < 34; c++) {
+          const ang = skyHash(c * 7 + 1) * Math.PI * 2;
+          const rad = skyHash(c * 11 + 3) * discR * 0.72;
+          const cx = S / 2 + Math.cos(ang) * rad;
+          const cy = S / 2 + Math.sin(ang) * rad * 0.92;
+          const cr = (3 + skyHash(c * 13 + 5) * 18) * (S / 512);
           const mare = moonCtx.createRadialGradient(cx, cy, 0, cx, cy, cr);
-          mare.addColorStop(0, `rgba(170,178,195,${0.12 + skyHash(c * 17) * 0.14})`);
-          mare.addColorStop(1, "rgba(170,178,195,0)");
+          mare.addColorStop(0, `rgba(150,158,178,${0.14 + skyHash(c * 17) * 0.18})`);
+          mare.addColorStop(1, "rgba(150,158,178,0)");
           moonCtx.fillStyle = mare;
           moonCtx.beginPath();
           moonCtx.arc(cx, cy, cr, 0, Math.PI * 2);
           moonCtx.fill();
         }
-        moonCtx.fillStyle = "rgba(170,182,210,0.24)";
-        for (let m = 0; m < 18; m++) {
-          const cx = S * (0.28 + skyHash(m * 7 + 1) * 0.44);
-          const cy = S * (0.28 + skyHash(m * 11 + 3) * 0.44);
-          const cr = 3 + skyHash(m * 13 + 5) * 16;
-          moonCtx.beginPath();
-          moonCtx.arc(cx, cy, cr, 0, Math.PI * 2);
-          moonCtx.fill();
-        }
+        // Soft terminator shading on the left rim.
+        const term = moonCtx.createLinearGradient(S / 2 - discR, 0, S / 2 + discR * 0.2, 0);
+        term.addColorStop(0, "rgba(40,50,80,0.22)");
+        term.addColorStop(0.45, "rgba(40,50,80,0.06)");
+        term.addColorStop(1, "rgba(40,50,80,0)");
+        moonCtx.fillStyle = term;
+        moonCtx.beginPath();
+        moonCtx.arc(S / 2, S / 2, discR, 0, Math.PI * 2);
+        moonCtx.fill();
         return moonCanvas;
       }
 
@@ -4220,7 +4523,7 @@
         });
         const skyR = Math.max(280, cLen * 0.82);
         const skyCenter = new THREE.Vector3(0, 18, cZ0 - cLen / 2);
-        const sky = new THREE.Mesh(new THREE.SphereGeometry(skyR, 64, 32), skyMat);
+        const sky = new THREE.Mesh(new THREE.SphereGeometry(skyR, 72, 40), skyMat);
         sky.position.copy(skyCenter);
         sky.castShadow = false;
         sky.receiveShadow = false;
@@ -4228,15 +4531,15 @@
 
         const moonDir = new THREE.Vector3(0.55, 0.42, -0.72).normalize();
         const moonMesh = new THREE.Mesh(
-          new THREE.PlaneGeometry(skyR * 0.52, skyR * 0.52),
+          new THREE.PlaneGeometry(skyR * 0.58, skyR * 0.58),
           new THREE.MeshBasicMaterial({
-            map: texFinish(new THREE.CanvasTexture(buildNightMoonTexture(512))),
+            map: texFinish(new THREE.CanvasTexture(buildNightMoonTexture(768))),
             transparent: true,
             depthWrite: false,
             fog: false,
           }),
         );
-        moonMesh.position.copy(skyCenter).addScaledVector(moonDir, skyR * 0.9);
+        moonMesh.position.copy(skyCenter).addScaledVector(moonDir, skyR * 0.88);
         moonMesh.lookAt(0, EYE_HEIGHT, cZ0);
         grp.add(moonMesh);
 
@@ -4246,12 +4549,22 @@
         beamCanvas.height = 256;
         const beamCtx = beamCanvas.getContext("2d");
         const beamGrad = beamCtx.createLinearGradient(0, 0, 0, 256);
-        beamGrad.addColorStop(0, "rgba(210,230,255,0.18)");
-        beamGrad.addColorStop(0.35, "rgba(170,200,245,0.08)");
-        beamGrad.addColorStop(0.7, "rgba(150,185,235,0.03)");
+        beamGrad.addColorStop(0, "rgba(220,235,255,0.22)");
+        beamGrad.addColorStop(0.25, "rgba(180,210,250,0.1)");
+        beamGrad.addColorStop(0.55, "rgba(160,195,240,0.04)");
         beamGrad.addColorStop(1, "rgba(150,185,235,0)");
         beamCtx.fillStyle = beamGrad;
         beamCtx.fillRect(0, 0, 64, 256);
+        // Soft side falloff so shafts look cylindrical, not flat cards.
+        const beamSide = beamCtx.createLinearGradient(0, 0, 64, 0);
+        beamSide.addColorStop(0, "rgba(0,0,0,0.55)");
+        beamSide.addColorStop(0.35, "rgba(0,0,0,0)");
+        beamSide.addColorStop(0.65, "rgba(0,0,0,0)");
+        beamSide.addColorStop(1, "rgba(0,0,0,0.55)");
+        beamCtx.globalCompositeOperation = "destination-out";
+        beamCtx.fillStyle = beamSide;
+        beamCtx.fillRect(0, 0, 64, 256);
+        beamCtx.globalCompositeOperation = "source-over";
         const beamTex = texFinish(new THREE.CanvasTexture(beamCanvas));
         const beamMat = new THREE.MeshBasicMaterial({
           map: beamTex,
@@ -4259,54 +4572,62 @@
           depthWrite: false,
           fog: false,
           side: THREE.DoubleSide,
+          opacity: 0.85,
         });
-        for (let b = 0; b < 4; b++) {
-          const beam = new THREE.Mesh(new THREE.PlaneGeometry(16 + b * 7, 48 + b * 8), beamMat);
-          const spread = (b - 1.5) * 0.2;
+        for (let b = 0; b < 5; b++) {
+          const beam = new THREE.Mesh(new THREE.PlaneGeometry(14 + b * 6, 52 + b * 7), beamMat);
+          const spread = (b - 2) * 0.18;
           beam.position
             .copy(skyCenter)
-            .addScaledVector(moonDir, skyR * 0.52)
-            .add(new THREE.Vector3(spread * 14, -10 - b * 2, spread * 8));
+            .addScaledVector(moonDir, skyR * 0.5)
+            .add(new THREE.Vector3(spread * 16, -8 - b * 2.2, spread * 9));
           beam.lookAt(0, 0, cZ0 - cLen * 0.32);
-          beam.rotation.z += spread * 0.4;
+          beam.rotation.z += spread * 0.35;
           grp.add(beam);
         }
 
-        // Low horizon mist where cool sky meets warm sand.
-        const mistMat = new THREE.MeshBasicMaterial({
-          color: 0x2a2848,
-          transparent: true,
-          opacity: 0.22,
-          depthWrite: false,
-          fog: false,
-          side: THREE.DoubleSide,
-        });
-        const mist = new THREE.Mesh(new THREE.RingGeometry(skyR * 0.55, skyR * 0.92, 48, 1), mistMat);
-        mist.rotation.x = -Math.PI / 2;
-        mist.position.set(skyCenter.x, 0.4, skyCenter.z);
-        grp.add(mist);
-
-        // Dune silhouettes on the night horizon.
-        const duneMat = new THREE.MeshBasicMaterial({ color: 0x141020 });
-        const duneFarMat = new THREE.MeshBasicMaterial({ color: 0x1c1828 });
-        for (let i = 0; i < 18; i++) {
-          const a = (i / 18) * Math.PI * 2 + 0.17;
-          const dr = skyR * (0.66 + (i % 3) * 0.055);
-          const dh = 16 + ((i * 13) % 26);
-          const dune = new THREE.Mesh(
-            new THREE.ConeGeometry(26 + ((i * 7) % 30), dh, 5, 1),
-            i % 2 ? duneMat : duneFarMat,
-          );
-          dune.position.set(
-            skyCenter.x + Math.cos(a) * dr,
-            dh / 2 - 2,
-            skyCenter.z + Math.sin(a) * dr,
-          );
-          dune.rotation.y = a * 1.7;
-          dune.matrixAutoUpdate = false;
-          dune.updateMatrix();
-          grp.add(dune);
+        // Layered horizon mist: cool upper haze + warm sand glow.
+        function addHorizonMist(inner, outer, color, opacity, y) {
+          const mistMat = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity,
+            depthWrite: false,
+            fog: false,
+            side: THREE.DoubleSide,
+          });
+          const mist = new THREE.Mesh(new THREE.RingGeometry(skyR * inner, skyR * outer, 64, 1), mistMat);
+          mist.rotation.x = -Math.PI / 2;
+          mist.position.set(skyCenter.x, y, skyCenter.z);
+          grp.add(mist);
         }
+        addHorizonMist(0.5, 0.78, 0x2a2848, 0.16, 1.2);
+        addHorizonMist(0.62, 0.94, 0x3a3048, 0.2, 0.35);
+        addHorizonMist(0.72, 0.98, 0x6a4830, 0.12, 0.08);
+
+        // Layered dune silhouettes - far ridge then nearer hills.
+        function addDuneRing(count, radiusFactor, heightBase, heightVar, color, ySink) {
+          const mat = new THREE.MeshBasicMaterial({ color, fog: false });
+          for (let i = 0; i < count; i++) {
+            const a = (i / count) * Math.PI * 2 + 0.11 + skyHash(i * 5 + 2) * 0.08;
+            const dr = skyR * (radiusFactor + (i % 4) * 0.018);
+            const dh = heightBase + skyHash(i * 13 + 4) * heightVar;
+            const dune = new THREE.Mesh(new THREE.ConeGeometry(22 + skyHash(i * 7) * 34, dh, 6, 1), mat);
+            dune.position.set(
+              skyCenter.x + Math.cos(a) * dr,
+              dh / 2 - ySink,
+              skyCenter.z + Math.sin(a) * dr,
+            );
+            dune.rotation.y = a * 1.4;
+            dune.scale.x = 1.2 + skyHash(i * 17) * 0.9;
+            dune.matrixAutoUpdate = false;
+            dune.updateMatrix();
+            grp.add(dune);
+          }
+        }
+        addDuneRing(22, 0.78, 10, 14, 0x0e0c18, 1.5);
+        addDuneRing(16, 0.68, 14, 22, 0x16122a, 2);
+        addDuneRing(10, 0.6, 8, 12, 0x1c1830, 1);
 
         // Expansive desert sand beneath the paved causeway.
         const rH = Math.ceil(cLen / 5);
@@ -4331,18 +4652,25 @@
         );
 
         // Cracked paving remains level so the original self-paced walking stays unchanged.
-        const wallH = 3.45;
-        const paveRepeatU = Math.max(4, CW * 0.9);
-        const paveRepeatV = Math.max(6, rH);
-        stat(
-          new THREE.BoxGeometry(CW, 0.35, cLen),
-          corridorStoneMat(paveRepeatU, paveRepeatV, {
-            color: 0xc89448,
-            bumpScale: 0.075,
-            emissive: 0x100c06,
-          }),
-          0, -0.18, cZ0 - cLen / 2,
-        );
+        const wallH = 4.85;
+        const paveRepeatU = Math.max(2.8, CW * 0.55);
+        const paveRepeatV = Math.max(4.5, rH * 0.85);
+        const paveMat = corridorFloorMat(paveRepeatU, paveRepeatV, {
+          color: 0xd8aa58,
+          bumpScale: 0.09,
+          emissive: 0x120e08,
+          roughness: 0.88,
+        });
+        stat(new THREE.BoxGeometry(CW, 0.35, cLen), paveMat, 0, -0.18, cZ0 - cLen / 2);
+        // Soft sand lip along both edges of the avenue.
+        const edgeSand = corridorFloorMat(paveRepeatU * 0.35, paveRepeatV, {
+          color: 0xb88848,
+          bumpScale: 0.055,
+          emissive: 0x0c0804,
+          roughness: 0.95,
+        });
+        stat(new THREE.BoxGeometry(0.38, 0.12, cLen), edgeSand.clone(), -(CW / 2) + 0.12, -0.02, cZ0 - cLen / 2);
+        stat(new THREE.BoxGeometry(0.38, 0.12, cLen), edgeSand.clone(), CW / 2 - 0.12, -0.02, cZ0 - cLen / 2);
         const wallRepeatV = Math.max(2.4, wallH / 1.1);
         const wallRepeatU = Math.max(6, (cLen + 1.2) / 2.6);
         const sandstone = corridorStoneMat(2.4, 2.4, {
@@ -4415,7 +4743,7 @@
           const gz = cZ0 - PAINT_Z0 - i * PAINT_SPACING;
           const side = i % 2 === 0 ? -1 : 1;
           const sx = side * (halfW - 0.12);
-          const sy = 1.55 + (i % 2) * 0.06;
+          const sy = 2.05 + (i % 2) * 0.08;
           stat(
             new THREE.SphereGeometry(0.11 + (i % 3) * 0.015, 8, 6),
             sconceMat,
@@ -4454,64 +4782,99 @@
           stat(new THREE.CylinderGeometry(0.44, 0.58, 0.56, 10), wornStone.clone(), sd * (CW / 2 + 0.7), 0.28, z);
         }
 
-        // Memory gates: sandstone ring frame + recessed backer + native glyph plane.
-        const frameOuterR = 2.16;
-        const frameInnerR = 1.94;
-        const backerGeo = new THREE.CircleGeometry(frameInnerR, 40);
+        // Memory gates: carved sandstone ring + gold inlay + recessed backer + glyph.
+        const frameOuterR = 2.78;
+        const frameInnerR = 2.48;
+        const backerGeo = new THREE.CircleGeometry(frameInnerR - 0.03, 48);
         const glyphGeo = new THREE.PlaneGeometry(GLYPH_PLANE_SIZE, GLYPH_PLANE_SIZE);
-        const gateBackerMat = new THREE.MeshLambertMaterial({
-          color: 0x2a2014,
-          emissive: 0x080604,
+        const gateBackerMat = new THREE.MeshStandardMaterial({
+          color: 0x241a10,
+          emissive: 0x0a0804,
+          roughness: 0.92,
+          metalness: 0.02,
           side: THREE.DoubleSide,
         });
         const glyphFallbackMat = new THREE.MeshBasicMaterial({ visible: false });
+        const gateCenterY = 2.62;
+        const ringFaceGeo = new THREE.RingGeometry(frameInnerR, frameOuterR, 64);
+        const ringOuterGeo = new THREE.TorusGeometry(
+          (frameOuterR + frameInnerR) * 0.5,
+          0.11,
+          12,
+          64,
+        );
+        const ringLipGeo = new THREE.TorusGeometry(frameInnerR + 0.03, 0.05, 10, 56);
         for (let i = 0; i < nP; i++) {
           const gi = seq && seq[i] != null ? seq[i] : randInt(N_GLYPHS),
             pz = cZ0 - PAINT_Z0 - i * PAINT_SPACING;
-          const ringMap = TX.goldstone.clone();
-          ringMap.repeat.set(1.8, 1.8);
+          const ringMap = TX.gateRing.clone();
+          ringMap.repeat.set(1, 1);
           ringMap.needsUpdate = true;
           const ringBump = BUMP_WALL.clone();
-          ringBump.repeat.set(5, 5);
+          ringBump.repeat.set(3.5, 3.5);
           ringBump.needsUpdate = true;
-          const ringMat = new THREE.MeshPhongMaterial({
-            color: 0xa07838,
+          const ringMat = new THREE.MeshStandardMaterial({
+            color: 0xd4a050,
             map: ringMap,
             bumpMap: ringBump,
-            bumpScale: 0.09,
-            emissive: 0x181008,
-            specular: 0x6e4a1c,
-            shininess: 18,
+            bumpScale: 0.07,
+            roughness: 0.62,
+            metalness: 0.18,
+            emissive: 0x1a1008,
             side: THREE.DoubleSide,
           });
           const ringGlowMat = ringMat.clone();
-          ringGlowMat.color.setHex(0xe0b058);
+          ringGlowMat.color.setHex(0xf0c060);
           ringGlowMat.emissive.setHex(0xb07020);
-          const ring = new THREE.Mesh(new THREE.RingGeometry(frameInnerR, frameOuterR, 48), ringMat);
-          ring.position.set(0, 2.45, pz + 0.018);
+          ringGlowMat.emissiveIntensity = 0.85;
+          const ringBodyMat = new THREE.MeshStandardMaterial({
+            color: 0xb88840,
+            map: TX.goldstone.clone(),
+            bumpMap: ringBump.clone(),
+            bumpScale: 0.06,
+            roughness: 0.7,
+            metalness: 0.12,
+            emissive: 0x140e06,
+          });
+          const ring = new THREE.Mesh(ringFaceGeo.clone(), ringMat);
+          ring.position.set(0, gateCenterY, pz + 0.02);
           ring.renderOrder = 2;
           ring.castShadow = false;
-          ring.receiveShadow = false;
+          ring.receiveShadow = true;
           grp.add(ring);
-          const inlayMat = new THREE.MeshPhongMaterial({
-            color: 0x9f741f, emissive: 0x110900, specular: 0xffd36b, shininess: 46, side: THREE.DoubleSide,
+          const ringBody = new THREE.Mesh(ringOuterGeo.clone(), ringBodyMat);
+          ringBody.position.set(0, gateCenterY, pz + 0.01);
+          ringBody.castShadow = true;
+          ringBody.receiveShadow = true;
+          grp.add(ringBody);
+          const inlayMat = new THREE.MeshStandardMaterial({
+            color: 0xe8b848,
+            emissive: 0x3a2008,
+            roughness: 0.35,
+            metalness: 0.55,
+            side: THREE.DoubleSide,
           });
           const inlayGlowMat = inlayMat.clone();
-          inlayGlowMat.color.setHex(0xffca57);
-          inlayGlowMat.emissive.setHex(0x6a3105);
-          const inlay = new THREE.Mesh(new THREE.RingGeometry(1.9, frameInnerR, 48), inlayMat);
-          inlay.position.set(0, 2.45, pz + 0.016);
+          inlayGlowMat.color.setHex(0xffd060);
+          inlayGlowMat.emissive.setHex(0x8a4010);
+          const inlay = new THREE.Mesh(new THREE.RingGeometry(frameInnerR - 0.08, frameInnerR, 56), inlayMat);
+          inlay.position.set(0, gateCenterY, pz + 0.024);
           inlay.renderOrder = 1;
           grp.add(inlay);
+          const lip = new THREE.Mesh(ringLipGeo.clone(), inlayMat.clone());
+          lip.position.set(0, gateCenterY, pz + 0.012);
+          grp.add(lip);
           const backer = new THREE.Mesh(backerGeo.clone(), gateBackerMat);
-          backer.position.set(0, 2.45, pz + 0.008);
+          backer.position.set(0, gateCenterY, pz + 0.008);
           backer.renderOrder = 0;
           grp.add(backer);
           const glyphMat =
-            panelMaterials && panelMaterials[gi] ? panelMaterials[gi] : glyphFallbackMat;
+            panelMaterials && panelMaterials[gi]
+              ? panelMaterials[gi].clone()
+              : glyphFallbackMat;
           const glyph = new THREE.Mesh(glyphGeo.clone(), glyphMat);
           glyph.userData.panelIdx = i;
-          glyph.position.set(0, 2.45, pz + 0.026);
+          glyph.position.set(0, gateCenterY, pz + 0.03);
           glyph.renderOrder = 3;
           glyph.visible = false;
           glyph.castShadow = false;
@@ -4527,21 +4890,26 @@
             inlay,
             inlayMat,
             inlayGlowMat,
+            lip,
+            backer,
+            ringBody,
+            idx: i,
             revealed: false,
             responded: false,
-            glyphHidden: true,
-            glowTimer: null,
-            idx: i,
             revealTime: 0,
+            rsi: 0,
+            glowTimer: null,
+            glyphHidden: true,
+            tutMiss: 0,
           });
         }
 
         // A collapsed pylon marks the end of each memory route.
         const gateZ = cZ1 + 2.2;
         const endHalf = CW / 2 + 0.35;
-        stat(new THREE.BoxGeometry(0.9, 6.2, 0.95), sandstone.clone(), -endHalf, 3.1, gateZ);
-        stat(new THREE.BoxGeometry(0.9, 4.1, 0.95), wornStone.clone(), endHalf, 2.05, gateZ);
-        stat(new THREE.BoxGeometry(CW + 0.8, 0.75, 0.95), sandstone.clone(), 0, 6.15, gateZ);
+        stat(new THREE.BoxGeometry(0.9, 7.4, 0.95), sandstone.clone(), -endHalf, 3.7, gateZ);
+        stat(new THREE.BoxGeometry(0.9, 5.2, 0.95), wornStone.clone(), endHalf, 2.6, gateZ);
+        stat(new THREE.BoxGeometry(CW + 0.8, 0.85, 0.95), sandstone.clone(), 0, 7.55, gateZ);
         stat(new THREE.BoxGeometry(1.6, 0.48, 0.85), wornStone.clone(), 0.45, 0.24, gateZ - 1.05, 0.28);
 
         // Sand drifts against the path edges (static, low, peripheral).
@@ -4802,7 +5170,7 @@
         const sy = Math.sin(euler.y),
           cy = Math.cos(euler.y);
         const sprint = KEYS["ShiftLeft"] || KEYS["ShiftRight"];
-        const spd = sprint ? 8.0 : 4.2;
+        const spd = sprint ? 9.5 : 5.2;
         let moved = false;
         if (KEYS["KeyW"] || KEYS["ArrowUp"]) {
           moved = true;
@@ -6278,39 +6646,40 @@
       }
 
       function tutorialFourPaintingQuiz(N, variant) {
-        const refTrial = N === 1 ? 3 : 1;
+        // Compare current gate 4 to the N-back reference (gate 3 for 1-back, gate 1 for 3-back).
+        const refTrial = 4 - N;
         const currTrial = 4;
         const intro =
-          "These <b>four memory gates</b> appeared in order. Remember each symbol, then answer below.";
+          `These <b>four memory gates</b> appeared in order. This is a <b>${N}-back</b> check.`;
+        let paintings;
         if (N === 1) {
-          const paintings =
-            variant === "match" ? [0, 1, 2, 2] : [0, 1, 2, 3];
-          return {
-            paintings,
-            refTrial,
-            currTrial,
-            expect: variant === "match" ? 1 : 2,
-            question: intro,
-            prompt: `Is ${GAME.stimulus} <b>4</b> the same symbol as ${GAME.stimulus} <b>3</b>?`,
-          };
+          // Gate 4 vs gate 3. Avoid accidental same-symbol pairs that are not the quiz target.
+          paintings = variant === "match" ? [0, 3, 1, 1] : [0, 1, 2, 3];
+        } else {
+          // Gate 4 vs gate 1 (three steps back). Keep middle gates distinct.
+          paintings = variant === "match" ? [2, 0, 1, 2] : [0, 1, 2, 3];
         }
-        const paintings = variant === "match" ? [0, 1, 2, 0] : [0, 1, 2, 3];
+        const expect = paintings[currTrial - 1] === paintings[refTrial - 1] ? 1 : 2;
+        const backLabel = N === 1 ? "1 back / previous" : `${N} back`;
         return {
           paintings,
           refTrial,
           currTrial,
-          expect: variant === "match" ? 1 : 2,
+          nback: N,
+          expect,
           question: intro,
-          prompt: `Is ${GAME.stimulus} <b>4</b> the same symbol as ${GAME.stimulus} <b>1</b> (three steps back)?`,
+          prompt:
+            `Is ${GAME.stimulus} <b>${currTrial}</b> (NOW) the same symbol as ${GAME.stimulus} <b>${refTrial}</b> (${backLabel})?`,
         };
       }
 
       function buildTutorialSlides(N) {
-        const watchCount = N === 1 ? `the <b>first</b> ${GAME.stimulus}` : `the <b>first ${N}</b> ${GAME.stimulusPlural}`;
-        const orderNote =
-          "<p>This guide covers only the <b>" +
-          N +
-          "-back</b> task you are about to begin.</p>";
+        const nextN = selectedOrder[1] || (N === 1 ? 3 : 1);
+        const watchCount =
+          N === 1 ? `the <b>first</b> ${GAME.stimulus}` : `the <b>first ${N}</b> ${GAME.stimulusPlural}`;
+        const sessionOrder =
+          `<p>This session runs <b>${selectedOrder[0]}-back</b>, then <b>${selectedOrder[1]}-back</b>.</p>` +
+          `<p>This guide teaches the first hall: <b>${N}-back</b>.</p>`;
 
         const quizMatch = tutorialFourPaintingQuiz(N, "match");
         const quizNoMatch = tutorialFourPaintingQuiz(N, "noMatch");
@@ -6321,23 +6690,23 @@
             html:
               `<p><b>Welcome.</b> You stand in the <b>${GAME.ruins}</b> along the <b>${GAME.avenue}</b>.</p>` +
               `<p>Cross each central memory gate. When its glyph appears, keep your gaze steady and <b>remember</b> it.</p>` +
-              `<p>First: a <b>${N}-back practice</b>, then the measured round.</p>` +
-              orderNote,
+              sessionOrder +
+              `<p>First: a <b>${N}-back practice</b>, then the measured ${N}-back round.</p>`,
           },
           {
             anim: "point",
             html:
               "<p>At the start of each block, the <b>first few gates are watch only</b>.</p>" +
-              `<p>For ${watchCount}, <b>just look</b> and remember. <b>Do not answer</b> yet.</p>` +
-              "<p>The corner of the screen will say <b>OBSERVE</b> while you are watching only.</p>",
+              `<p>For ${watchCount}, <b>just look</b> and remember. <b>Do not click MATCH or NO MATCH</b> yet.</p>` +
+              `<p>The top left shows <b>N-BACK: ${N}</b>. Walk forward; answering starts after the watch-only gates.</p>`,
           },
           {
             anim: "gesture",
             html:
               `<p>After the watch-only gates, decide on each new symbol:</p>` +
               (N === 1
-                ? `<p><b>1-back:</b> Is it the <b>same</b> as the <b>previous</b> ${GAME.stimulus} in this block?</p>`
-                : `<p><b>${N}-back:</b> Is it the <b>same</b> as the ${GAME.stimulus} <b>${N} steps back</b> in this block?</p>`) +
+                ? `<p><b>1-back:</b> Is it the <b>same</b> as the <b>previous</b> ${GAME.stimulus} (1 step back)?</p>`
+                : `<p><b>${N}-back:</b> Is it the <b>same</b> as the ${GAME.stimulus} <b>${N} steps back</b>?</p>`) +
               "<p><b>Same symbol</b> \u2192 <b>MATCH</b> (left click).<br><b>Different symbol</b> \u2192 <b>NO MATCH</b> (right click).</p>",
           },
           {
@@ -6356,8 +6725,13 @@
           {
             anim: "bow",
             html:
-              `<p>Next is a <b>practice block</b> (${PRACTICE_TRIALS} gates, ${N}-back). You will answer for real.</p>` +
-              "<p>You will get feedback when you miss. Cross every gate to complete the warm-up. Practice accuracy does not gate progression.</p>" +
+              `<p>Next is a <b>practice block</b> (${PRACTICE_TRIALS} gates, <b>${N}-back</b>). You will answer for real.</p>` +
+              `<p>Later you will switch to <b>${nextN}-back</b>: ` +
+              (nextN === 1
+                ? `compare each gate to the <b>previous</b> ${GAME.stimulus}.`
+                : `compare each gate to the one <b>${nextN} steps back</b>.`) +
+              "</p>" +
+              "<p>You will get feedback when you miss. Practice accuracy does not gate progression.</p>" +
               "<p>When you are ready, click <b>BEGIN PRACTICE</b>.</p>",
           },
         ];
@@ -6828,14 +7202,19 @@
         const nextN = selectedOrder[1];
         const khenuLine =
           nextN === 3
-            ? "The air grows heavier. <b>Three steps back</b> now."
-            : "The hall opens again. <b>One step</b> at a time.";
+            ? "The air grows heavier. Compare each gate to the one <b>three steps back</b>."
+            : "The hall opens again. Compare each gate to the <b>previous</b> one only.";
+        const nextRule =
+          nextN === 1
+            ? `<p>Next warm-up is <b>1-back</b>: from gate 2 onward, is the symbol the same as the <b>previous</b> ${GAME.stimulus}?</p>`
+            : `<p>Next warm-up is <b>3-back</b>: gates 1-3 are watch only; from gate 4 onward, is the symbol the same as the one <b>3 ${GAME.stimulusPlural} back</b>?</p>`;
         const body =
           '<div class="ag-brief">' +
           blockResultsSectionHtml(1, roundLoreLabel(completedN)) +
           practiceResultNoteHtml(1) +
           `<p class="ag-khenu-line"><b>Khenu:</b> ${khenuLine}</p>` +
-          `<p class="ag-lead">Nice work. Take a short break. Next is <b>${nextN}-back</b> warm-up, then the next hall.</p>` +
+          `<p class="ag-lead">Nice work. Take a short break.</p>` +
+          nextRule +
           "</div>";
         showTransitionGate({
           role: "ROUND 1 COMPLETE",
@@ -7884,10 +8263,18 @@
           .map((gi, idx) => {
             const num = idx + 1;
             let cls = "tut-quiz-glyph";
-            if (num === refTrial) cls += " tut-quiz-ref";
-            if (num === currTrial) cls += " tut-quiz-now";
+            let tag = "&nbsp;";
+            if (num === refTrial) {
+              cls += " tut-quiz-ref";
+              tag = quiz.nback === 1 ? "1 BACK" : `${quiz.nback} BACK`;
+            }
+            if (num === currTrial) {
+              cls += " tut-quiz-now";
+              tag = "NOW";
+            }
             return (
               `<div class="${cls}">` +
+              `<span class="tut-quiz-tag">${tag}</span>` +
               `<span class="tut-quiz-lbl">${num}</span>` +
               `<span class="tut-quiz-ch">${GLYPHS[gi].ch}</span>` +
               "</div>"
@@ -7937,8 +8324,8 @@
               fb.className = "tut-quiz-fb bad";
               fb.textContent =
                 slide.quiz.expect === 1
-                  ? "Not quite. Same symbol means MATCH. Try again."
-                  : "Not quite. Different symbols mean NO MATCH. Try again.";
+                  ? `Not quite. Same as ${slide.quiz.nback === 1 ? "1 back" : slide.quiz.nback + " back"} means MATCH. Try again.`
+                  : `Not quite. Different from ${slide.quiz.nback === 1 ? "1 back" : slide.quiz.nback + " back"} means NO MATCH. Try again.`;
               sounds.wrong();
               setTimeout(() => {
                 tutorialText.querySelectorAll(".tut-quiz-btn").forEach((b) => {
@@ -9147,14 +9534,19 @@
         if (filled === 0) throw new Error("Font check failed: Glyph rendered empty");
 
         panelTextures = GLYPHS.map((_, i) => {
-          const S = 256,
+          const S = 512,
             cv = document.createElement("canvas");
           cv.width = cv.height = S;
           drawGlyphTexture(cv.getContext("2d"), S, i);
           const tex = new THREE.CanvasTexture(cv);
           tex.generateMipmaps = true;
           tex.minFilter = THREE.LinearMipmapLinearFilter;
+          tex.magFilter = THREE.LinearFilter;
           tex.encoding = THREE.sRGBEncoding;
+          tex.anisotropy = Math.min(
+            8,
+            renderer.capabilities?.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1,
+          );
           return tex;
         });
         panelMaterials = panelTextures.map(
@@ -9162,9 +9554,10 @@
             new THREE.MeshBasicMaterial({
               map: t,
               transparent: true,
-              alphaTest: 0.06,
+              alphaTest: 0.015,
               side: THREE.DoubleSide,
               depthWrite: false,
+              fog: false,
             }),
         );
       }
