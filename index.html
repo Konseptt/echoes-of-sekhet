@@ -289,6 +289,11 @@
         font-size: clamp(9px, 2vw, 12px);
         letter-spacing: 0.06em;
       }
+      .hud-line.hud-watch {
+        color: rgba(255, 210, 120, 0.98);
+        font-size: clamp(9px, 2vw, 12px);
+        letter-spacing: 0.14em;
+      }
 
       #tfb {
         position: fixed;
@@ -3050,10 +3055,9 @@
       <div class="subtitle-main" id="ps-tagline">AVENUE OF ECHOES<br />RUINS OF SEKHET</div>
       <div id="ps-lore">
         <span class="tt-lore">
-          WALK THE MOONLIT CAUSEWAY.<br />
-          AT EACH MEMORY GATE, ASK:<br />
-          SAME GLYPH AS <b>N</b> BACK? &rarr; <b>MATCH</b><br />
-          DIFFERENT? &rarr; <b>NO MATCH</b>
+          TWO HALLS THIS SESSION (ORDER SET ON THE TITLE SCREEN).<br />
+          AT EACH MEMORY GATE: <b>MATCH</b> OR <b>NO MATCH</b>.<br />
+          RULES FOR EACH HALL APPEAR BEFORE YOU WALK.
         </span>
       </div>
 
@@ -3153,10 +3157,9 @@
       }
 
       function tutorialBackPhrase(N) {
-        const g = GAME.stimulus;
-        if (N === 1) return `the <b>previous</b> ${g}`;
-        if (N === 3) return `the ${g} <b>3 steps back</b>`;
-        return `the ${g} <b>${N} steps back</b>`;
+        if (N === 1) return "the <b>previous</b> gate";
+        if (N === 3) return "the gate <b>3 gates back</b>";
+        return `the gate <b>${N} gates back</b>`;
       }
 
       function gateHudLabel(n, total) {
@@ -3164,8 +3167,12 @@
       }
 
       function nbackCompareLabel(n) {
-        if (n === 1) return `the previous ${GAME.stimulus}`;
-        return `${n} ${GAME.stimulusPlural} back`;
+        if (n === 1) return "the previous gate";
+        return `${n} gates back`;
+      }
+
+      function sessionNOrderBriefHtml() {
+        return `<b>${selectedOrder[0]}-back</b>, then <b>${selectedOrder[1]}-back</b>`;
       }
 
       const MATCH_COUNT = 30;
@@ -6660,7 +6667,7 @@
           paintings = variant === "match" ? [2, 0, 1, 2] : [0, 1, 2, 3];
         }
         const expect = paintings[currTrial - 1] === paintings[refTrial - 1] ? 1 : 2;
-        const backLabel = N === 1 ? "1 back / previous" : `${N} back`;
+        const backLabel = N === 1 ? "PREVIOUS" : `${N} BACK`;
         return {
           paintings,
           refTrial,
@@ -6676,9 +6683,13 @@
       function buildTutorialSlides(N) {
         const nextN = selectedOrder[1] || (N === 1 ? 3 : 1);
         const watchCount =
-          N === 1 ? `the <b>first</b> ${GAME.stimulus}` : `the <b>first ${N}</b> ${GAME.stimulusPlural}`;
+          N === 1 ? "<b>gate 1</b>" : `<b>gates 1-${N}</b>`;
+        const watchBlockIntro =
+          N === 1
+            ? "At the start of each block, the <b>first gate is watch only</b>."
+            : `At the start of each block, the <b>first ${N} gates are watch only</b>.`;
         const sessionOrder =
-          `<p>This session runs <b>${selectedOrder[0]}-back</b>, then <b>${selectedOrder[1]}-back</b>.</p>` +
+          `<p>This session runs ${sessionNOrderBriefHtml()}.</p>` +
           `<p>This guide teaches the first hall: <b>${N}-back</b>.</p>`;
 
         const quizMatch = tutorialFourPaintingQuiz(N, "match");
@@ -6696,17 +6707,17 @@
           {
             anim: "point",
             html:
-              "<p>At the start of each block, the <b>first few gates are watch only</b>.</p>" +
+              `<p>${watchBlockIntro}</p>` +
               `<p>For ${watchCount}, <b>just look</b> and remember. <b>Do not click MATCH or NO MATCH</b> yet.</p>` +
-              `<p>The top left shows <b>N-BACK: ${N}</b>. Walk forward; answering starts after the watch-only gates.</p>`,
+              `<p>The top left shows <b>N-BACK: ${N}</b> and <b>WATCH ONLY</b> while you observe. Walk forward; answering starts after the watch-only gates.</p>`,
           },
           {
             anim: "gesture",
             html:
               `<p>After the watch-only gates, decide on each new symbol:</p>` +
               (N === 1
-                ? `<p><b>1-back:</b> Is it the <b>same</b> as the <b>previous</b> ${GAME.stimulus} (1 step back)?</p>`
-                : `<p><b>${N}-back:</b> Is it the <b>same</b> as the ${GAME.stimulus} <b>${N} steps back</b>?</p>`) +
+                ? "<p><b>1-back:</b> Is it the <b>same</b> as the <b>previous</b> gate?</p>"
+                : `<p><b>${N}-back:</b> Is it the <b>same</b> as the gate <b>${N} gates back</b>?</p>`) +
               "<p><b>Same symbol</b> \u2192 <b>MATCH</b> (left click).<br><b>Different symbol</b> \u2192 <b>NO MATCH</b> (right click).</p>",
           },
           {
@@ -6728,8 +6739,8 @@
               `<p>Next is a <b>practice block</b> (${PRACTICE_TRIALS} gates, <b>${N}-back</b>). You will answer for real.</p>` +
               `<p>Later you will switch to <b>${nextN}-back</b>: ` +
               (nextN === 1
-                ? `compare each gate to the <b>previous</b> ${GAME.stimulus}.`
-                : `compare each gate to the one <b>${nextN} steps back</b>.`) +
+                ? "compare each gate to the <b>previous</b> gate."
+                : `compare each gate to the one <b>${nextN} gates back</b>.`) +
               "</p>" +
               "<p>You will get feedback when you miss. Practice accuracy does not gate progression.</p>" +
               "<p>When you are ready, click <b>BEGIN PRACTICE</b>.</p>",
@@ -6989,17 +7000,15 @@
       }
 
       function nbackRuleParagraph(n) {
-        const g = GAME.stimulus;
-        const gp = GAME.stimulusPlural;
         if (n === 1) {
           return (
             `<p>Gate <b>1</b> is watch only: walk through and observe, do not click.</p>` +
-            `<p>From gate <b>2</b> onward: is the symbol the <b>same</b> as the one on the <b>previous</b> ${g}?</p>`
+            "<p>From gate <b>2</b> onward: is the symbol the <b>same</b> as on the <b>previous</b> gate?</p>"
           );
         }
         return (
           `<p>Gates <b>1-${n}</b> are watch only: just look, do not click.</p>` +
-          `<p>From gate <b>${n + 1}</b> onward: is the symbol the <b>same</b> as the one <b>${n} ${gp} back</b>?</p>`
+          `<p>From gate <b>${n + 1}</b> onward: is the symbol the <b>same</b> as the gate <b>${n} gates back</b>?</p>`
         );
       }
 
@@ -7202,12 +7211,12 @@
         const nextN = selectedOrder[1];
         const khenuLine =
           nextN === 3
-            ? "The air grows heavier. Compare each gate to the one <b>three steps back</b>."
-            : "The hall opens again. Compare each gate to the <b>previous</b> one only.";
+            ? "The air grows heavier. Compare each gate to the one <b>three gates back</b>."
+            : "The hall opens again. Compare each gate to the <b>previous</b> gate only.";
         const nextRule =
           nextN === 1
-            ? `<p>Next warm-up is <b>1-back</b>: from gate 2 onward, is the symbol the same as the <b>previous</b> ${GAME.stimulus}?</p>`
-            : `<p>Next warm-up is <b>3-back</b>: gates 1-3 are watch only; from gate 4 onward, is the symbol the same as the one <b>3 ${GAME.stimulusPlural} back</b>?</p>`;
+            ? "<p>Next warm-up is <b>1-back</b>: gate 1 is watch only; from gate 2 onward, is the symbol the same as on the <b>previous</b> gate?</p>"
+            : "<p>Next warm-up is <b>3-back</b>: gates 1-3 are watch only; from gate 4 onward, is the symbol the same as the gate <b>3 gates back</b>?</p>";
         const body =
           '<div class="ag-brief">' +
           blockResultsSectionHtml(1, roundLoreLabel(completedN)) +
@@ -7520,6 +7529,15 @@
       }
 
       /**
+       * True while the player is on a watch-only gate (observe phase).
+       */
+      function isWatchOnlyHud() {
+        if (game.phase !== "corridor" || game.blockComplete || game.awaitingResponse) return false;
+        if (game.hudPaint != null && game.hudPaint < game.N) return true;
+        return game.nextIdx < game.N;
+      }
+
+      /**
        * Updates the on-screen display (Painting # and Accuracy).
        */
       function hudUpdate(force = false) {
@@ -7547,13 +7565,18 @@
           : game.isPracticePhase
             ? `PRACTICE ACC ${getFormattedAccuracy()}`
             : `ACC ${getFormattedAccuracy()}`;
-        const snap = `${statusText}|${accLine}`;
+        const watchOnly = isWatchOnlyHud();
+        const snap = `${statusText}|${watchOnly}|${accLine}`;
 
         if (!force && snap === hudSnapshot) return;
         hudSnapshot = snap;
 
+        const watchLine = watchOnly
+          ? '<div class="hud-line hud-watch">WATCH ONLY</div>'
+          : "";
         sequenceBox.innerHTML =
           (statusText ? `<div class="hud-line">${statusText}</div>` : "") +
+          watchLine +
           `<div class="hud-line">${accLine}</div>`;
       }
 
@@ -7702,8 +7725,8 @@
 
           const watchNote =
             tutN === 1
-              ? "Watch the <b>first symbol</b> (gate 1), then answer at gates 2\u20137."
-              : `Watch the <b>first ${tutN} symbols</b> (gates 1\u2013${tutN}, no answers), then answer at gates ${tutN + 1}\u2013${tutTotal}.`;
+              ? "Watch <b>gate 1</b>, then answer at gates 2-7."
+              : `Watch <b>gates 1-${tutN}</b> (no answers), then answer at gates ${tutN + 1}-${tutTotal}.`;
 
           showBlockInstructionOverlay(1, tutN, enterCorridor, {
             title: `PRACTICE HALL \u00b7 ${tutN}-BACK`,
@@ -8632,8 +8655,8 @@
             `<b>Khenu:</b> I will guide you through <b>${total} practice gates</b> (${game.N}-back). ` +
             "Press <b>W</b> to walk. When you see <b>CLICK TO LOOK AROUND</b>, click the view so you can turn your head. " +
             (game.N > 1
-              ? `Watch the <b>first ${game.N} symbols</b> without answering. `
-              : "") +
+              ? `Watch <b>gates 1-${game.N}</b> without answering. `
+              : "Watch <b>gate 1</b> without answering. ") +
             "I will tell you when to answer.";
         } else if (state === "observe") {
           pose = "point";
@@ -8659,7 +8682,8 @@
           html = "<b>Khenu:</b> Correct! Walk forward to the next gate.";
         } else if (state === "complete") {
           pose = "bow";
-          html = "<b>Khenu:</b> Practice complete. Well done! The main round is next.";
+          html =
+            "<b>Khenu:</b> Guided walk complete. Well done! A <b>practice warm-up</b> is next before the measured round.";
         }
 
         showKhenuCoach({ pose, html });
@@ -8995,10 +9019,17 @@
       }
 
       function participantLoreHtml() {
-        const label = nbackCompareLabel(selectedOrder[0]);
+        const first = selectedOrder[0];
+        const second = selectedOrder[1];
+        const firstRule =
+          first === 1
+            ? "SAME GLYPH AS THE <b>PREVIOUS GATE</b>?"
+            : `SAME GLYPH AS <b>${first} GATES BACK</b>?`;
         return (
+          `SESSION: ${sessionNOrderBriefHtml().toUpperCase()}.<br />` +
           `KEEP GAZE ON THE CENTRAL ${GAME.stimulus.toUpperCase()}.<br />` +
-          `SAME GLYPH AS <b>${label.toUpperCase()}</b>? &rarr; <b>MATCH</b><br />` +
+          `FIRST HALL (${first}-BACK): ${firstRule} &rarr; <b>MATCH</b><br />` +
+          `LATER HALL (${second}-BACK): RULE SHOWN AT THE BREAK.<br />` +
           "DIFFERENT? &rarr; <b>NO MATCH</b><br />" +
           "YOU CAN WALK SIDEWAYS; ANSWER TO PASS EACH GATE."
         );
@@ -9011,11 +9042,13 @@
       }
 
       function cutsceneTaskLineHtml() {
-        const label = nbackCompareLabel(selectedOrder[0]);
+        const first = selectedOrder[0];
+        const firstLabel = nbackCompareLabel(first);
         return (
-          `<b>Walk the ${GAME.avenue}, gate by gate.</b>` +
+          `<b>Two halls this session: ${sessionNOrderBriefHtml()}.</b>` +
+          `<br><b>Walk the ${GAME.avenue}, gate by gate.</b>` +
           "<br><b>Remember each glyph.</b>" +
-          `<br><b>Same as ${label}? MATCH. If not, NO MATCH.</b>`
+          `<br><b>First hall (${first}-back): same as ${firstLabel}? MATCH. If not, NO MATCH.</b>`
         );
       }
 
