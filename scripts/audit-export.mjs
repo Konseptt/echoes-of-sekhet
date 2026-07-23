@@ -211,8 +211,11 @@ function auditBlock(blockNum, rows, meta, issues, options) {
     }
 
     if (trialType === "warmup") {
-      if (!blank(row.CRESP) || !blank(row.Resp) || !blank(row.ACC) || !blank(row.RT)) {
-        issues.push(`${prefix} trial ${trial}: warmup must leave CRESP/Resp/ACC/RT blank`);
+      if (
+        !blank(row.CRESP) || !blank(row.Resp) || !blank(row.ACC) ||
+        !blank(row.RT) || !blank(row.runningAccuracy)
+      ) {
+        issues.push(`${prefix} trial ${trial}: warmup must leave CRESP/Resp/ACC/RT/runningAccuracy blank`);
       }
       if (!blank(row.isMatch)) {
         issues.push(`${prefix} trial ${trial}: warmup must leave isMatch blank`);
@@ -267,6 +270,32 @@ function auditBlock(blockNum, rows, meta, issues, options) {
       pendingScored++;
       if (options.strict) {
         issues.push(`${prefix} trial ${trial}: scored row missing Resp (--strict)`);
+      }
+    }
+  }
+
+  // runningAccuracy: cumulative correct/answered % (1 dp) over answered scored
+  // trials in trial order — mirrors index.html refreshRunningAccuracy.
+  {
+    const scored = rows
+      .filter((r) => asStr(r.trialType) === "scored")
+      .sort((a, b) => trialNum(a) - trialNum(b));
+    let correct = 0;
+    let answered = 0;
+    for (const r of scored) {
+      const t = trialNum(r);
+      if (!hasResp(r.Resp)) {
+        if (!blank(r.runningAccuracy)) {
+          issues.push(`${prefix} trial ${t}: unanswered scored row must leave runningAccuracy blank`);
+        }
+        continue;
+      }
+      answered++;
+      if (asInt(r.ACC) === 1) correct++;
+      const expected = Math.round((correct / answered) * 1000) / 10;
+      const logged = Number(asStr(r.runningAccuracy));
+      if (blank(r.runningAccuracy) || !Number.isFinite(logged) || Math.abs(logged - expected) > 0.05) {
+        issues.push(`${prefix} trial ${t}: runningAccuracy ${asStr(r.runningAccuracy)} != expected ${expected}`);
       }
     }
   }

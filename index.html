@@ -3109,14 +3109,14 @@
 
     <script src="lib/xlsx.full.min.js"></script>
     <script src="lib/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FXAAShader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="lib/three-examples/FXAAShader.js"></script>
+    <script src="lib/three-examples/CopyShader.js"></script>
+    <script src="lib/three-examples/LuminosityHighPassShader.js"></script>
+    <script src="lib/three-examples/Pass.js"></script>
+    <script src="lib/three-examples/ShaderPass.js"></script>
+    <script src="lib/three-examples/EffectComposer.js"></script>
+    <script src="lib/three-examples/RenderPass.js"></script>
+    <script src="lib/three-examples/UnrealBloomPass.js"></script>
     <script>
       "use strict";
 
@@ -8705,11 +8705,16 @@
         if (game._hiddenAt) {
           const hiddenMs = wallNow - game._hiddenAt;
           game._hiddenAt = 0;
-          if (game.world && game.world.panels && game.currentTrialIdx >= 0) {
-            const p = game.world.panels[game.currentTrialIdx];
-            if (p && p.revealTime) p.revealTime += hiddenMs;
+          // While paused, resumeGame() already credits the full pause span (which
+          // includes any hidden slice) back to revealTime/lastEventTime. Compensating
+          // here too would double-count the overlap and understate RT + the next RSI.
+          if (game.phase !== "paused") {
+            if (game.world && game.world.panels && game.currentTrialIdx >= 0) {
+              const p = game.world.panels[game.currentTrialIdx];
+              if (p && p.revealTime) p.revealTime += hiddenMs;
+            }
+            if (game.lastEventTime > 0) game.lastEventTime += hiddenMs;
           }
-          if (game.lastEventTime > 0) game.lastEventTime += hiddenMs;
         }
         lastT = t;
         MoonGradeShader.uniforms.time.value = t * 0.001;

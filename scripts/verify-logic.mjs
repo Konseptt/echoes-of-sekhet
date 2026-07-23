@@ -19,6 +19,7 @@ import {
   glyphIdForIndex,
   GLYPHS,
   MAX_CONSECUTIVE_SAME_GLYPH,
+  refreshRunningAccuracy,
 } from "./glyphmind-core.mjs";
 import { auditExportData } from "./audit-export.mjs";
 
@@ -211,6 +212,9 @@ const auditMeta = {
   block2_matchPaintings_logged: MATCH_COUNT,
   block2_nonMatchPaintings_logged: NON_MATCH_PAINTING_COUNT,
 };
+// Populate runningAccuracy the way the real logger does, so audit can validate it.
+for (const block of [1, 2]) refreshRunningAccuracy(recorder.trials, block);
+
 const audit = auditExportData(recorder.trials, auditMeta, { strict: true });
 ok(audit.ok, "simulated export passes audit-export checks");
 if (!audit.ok) {

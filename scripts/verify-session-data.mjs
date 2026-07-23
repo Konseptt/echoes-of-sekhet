@@ -19,6 +19,7 @@ import {
   maxConsecutiveSameGlyph,
   maxConsecutiveTrue,
   MAX_CONSECUTIVE_SAME_GLYPH,
+  refreshRunningAccuracy,
 } from "./glyphmind-core.mjs";
 import { auditExportData } from "./audit-export.mjs";
 
@@ -417,6 +418,9 @@ ok(hasCompleteBlock(sim.logger.trials, 2), "block2 session complete");
 
 const trials = sim.logger.trials;
 ok(trials.length === 140, `full session row count (got ${trials.length})`);
+
+// Populate runningAccuracy the way the real logger does, so auditExportData validates it.
+for (const block of [1, 2]) refreshRunningAccuracy(trials, block);
 
 ok(
   trials.filter((t) => t.trialType === "practice" || t.trialType === "practice_warmup").length === 0,

@@ -273,3 +273,31 @@ export function validateBlockSequence(N, seq) {
 export function expectedCresp(stimulusId, targetId) {
   return stimulusId === targetId ? 1 : 2;
 }
+
+/**
+ * Cumulative scored accuracy (%) through each answered trial in a block, written
+ * onto each row's `runningAccuracy`. Mirrors index.html's refreshRunningAccuracy
+ * (index.html cannot import this module over file://). One source of truth for the
+ * Node side; the browser copy is kept identical by hand.
+ */
+export function refreshRunningAccuracy(trials, block) {
+  const scored = trials
+    .filter((t) => t.block === block && t.trialType === "scored")
+    .sort((a, b) => a.trial - b.trial);
+  let correct = 0;
+  let answered = 0;
+  for (const t of scored) {
+    if (t.Resp !== 1 && t.Resp !== 2) {
+      t.runningAccuracy = "";
+      continue;
+    }
+    answered++;
+    if (t.ACC === 1) correct++;
+    t.runningAccuracy = Math.round((correct / answered) * 1000) / 10;
+  }
+  trials
+    .filter((t) => t.block === block && t.trialType !== "scored")
+    .forEach((t) => {
+      t.runningAccuracy = "";
+    });
+}
