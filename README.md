@@ -132,7 +132,7 @@ flowchart TD
   file --> dl[DOWNLOAD DATA at session end]
 ```
 
-**Trials sheet columns:** `PID`, `Session`, `Condition`, `block`, `nback`, `trialType`, `trial`, `isMatch`, `CRESP`, `Resp`, `ACC`, `runningAccuracy`, `RT`, `RSI`, `StimulusName`, `StimulusChar`.
+**Trials sheet columns:** `PID`, `Session`, `Condition`, `block`, `nback`, `trialType`, `trial`, `isMatch`, `CRESP`, `Resp`, `ACC`, `runningAccuracy`, `RT`, `RSI`, `stimMarkerCode`, `revealPerfMs`, `responsePerfMs`, `StimulusName`, `StimulusChar`.
 
 **Meta sheet:** timestamps, `blockOrder_key`, row counts, per-block seeds, QC counts.
 
@@ -163,8 +163,13 @@ Requires [Node.js](https://nodejs.org/) for the scripts below. The game itself r
 ```bash
 node scripts/verify-logic.mjs
 node scripts/verify-session-data.mjs
+node scripts/verify-index-sync.mjs
 node scripts/audit-export.mjs path/to/export.xlsx --strict
 ```
+
+`verify-index-sync.mjs` fails if the sequence generator baked into `index.html`
+drifts from `scripts/glyphmind-core.mjs` (the two are hand-kept copies because ES
+module imports can't load over `file://`).
 
 A complete session should pass with **140 rows** and zero pending scored rows under `--strict`.
 
