@@ -3252,15 +3252,17 @@
         resultsBody = $("cr-body");
 
       // three.js scene
+      // MSAA on the canvas is unused: the composer blits FXAA'd output.
       const renderer = new THREE.WebGLRenderer({
         canvas: canvas,
-        antialias: true,
+        antialias: false,
         powerPreference: "high-performance",
         stencil: false,
       });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.shadowMap.autoUpdate = false;
       renderer.physicallyCorrectLights = true;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.08;
@@ -3350,10 +3352,13 @@
         cam.aspect = innerWidth / innerHeight;
         cam.updateProjectionMatrix();
         if (sceneComposer) {
+          sceneComposer.setPixelRatio(renderer.getPixelRatio());
           sceneComposer.setSize(innerWidth, innerHeight);
+          // Bloom at CSS pixels (not DPR) — same look, far less fill-rate.
           if (bloomPass) bloomPass.setSize(innerWidth, innerHeight);
           updatePostFxResolution();
         }
+        renderer.shadowMap.needsUpdate = true;
       }
       onResize();
       window.addEventListener("resize", onResize);
@@ -3372,7 +3377,7 @@
       const sunLight = new THREE.DirectionalLight(0xc8daf0, 0.94);
       sunLight.position.set(32, 58, -42);
       sunLight.castShadow = true;
-      sunLight.shadow.mapSize.set(4096, 4096);
+      sunLight.shadow.mapSize.set(2048, 2048);
       sunLight.shadow.camera.left = -26;
       sunLight.shadow.camera.right = 26;
       sunLight.shadow.camera.top = 30;
@@ -3391,7 +3396,24 @@
       scene.add(sandBounce);
       const GATE_LIGHT = new THREE.PointLight(0xd8e8ff, 0, 14, 2);
       GATE_LIGHT.position.set(0, 2.6, 0);
+      GATE_LIGHT.visible = false;
       scene.add(GATE_LIGHT);
+
+      let shadowAnchorX = Infinity,
+        shadowAnchorZ = Infinity;
+      function syncSunShadow(force) {
+        const x = cam.position.x,
+          z = cam.position.z;
+        if (!force && Math.abs(x - shadowAnchorX) < 0.55 && Math.abs(z - shadowAnchorZ) < 0.55) {
+          return;
+        }
+        shadowAnchorX = x;
+        shadowAnchorZ = z;
+        sunLight.position.set(x + 32, 58, z - 42);
+        sunLight.target.position.set(x, 0, z - 10);
+        sunLight.target.updateMatrixWorld();
+        renderer.shadowMap.needsUpdate = true;
+      }
 
       function setCorridorLighting() {
         AMBIENT.intensity = 0.3;
@@ -3409,13 +3431,51 @@
         scene.add(pl);
         return pl;
       });
-      const SCONCE_COUNT = 36;
+      // Pool of nearby sconce lights. Fixtures beyond PointLight.distance already
+      // contribute 0; keeping ~35 live lights still inflates the fragment shader.
+      const SCONCE_COUNT = 6;
+      const SCONCE_SLOTS = [];
       const SCONCE_LIGHTS = Array.from({ length: SCONCE_COUNT }, () => {
         const pl = new THREE.PointLight(0xffc868, 0.48, 11, 2);
         pl.visible = false;
         scene.add(pl);
         return pl;
       });
+      let sconceAnchorZ = Infinity;
+      function syncSconceLights(force) {
+        const pool = SCONCE_LIGHTS;
+        if (!SCONCE_SLOTS.length) {
+          for (let i = 0; i < pool.length; i++) pool[i].visible = false;
+          return;
+        }
+        const cz = cam.position.z;
+        if (!force && Math.abs(cz - sconceAnchorZ) < 1.2) return;
+        sconceAnchorZ = cz;
+        let best = 0,
+          bestD = Infinity;
+        for (let i = 0; i < SCONCE_SLOTS.length; i++) {
+          const d = Math.abs(SCONCE_SLOTS[i].z - cz);
+          if (d < bestD) {
+            bestD = d;
+            best = i;
+          }
+        }
+        const n = pool.length;
+        const start = Math.max(0, Math.min(best - (n >> 1), Math.max(0, SCONCE_SLOTS.length - n)));
+        for (let i = 0; i < n; i++) {
+          const slot = SCONCE_SLOTS[start + i];
+          const l = pool[i];
+          if (!slot) {
+            l.visible = false;
+            l.userData.corridorSconce = false;
+            continue;
+          }
+          l.position.set(slot.x, slot.y, slot.z);
+          l.intensity = slot.intensity;
+          l.visible = true;
+          l.userData.corridorSconce = true;
+        }
+      }
 
       // audio ctx + sfx
       let audioCtx = null;
@@ -3584,7 +3644,7 @@
         // pass does not double-brighten them into a washed-out look.
         tex.encoding = THREE.sRGBEncoding;
         const maxA = renderer.capabilities?.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
-        tex.anisotropy = Math.min(16, maxA);
+        tex.anisotropy = Math.min(8, maxA);
         return tex;
       }
 
@@ -4253,18 +4313,25 @@
       const DM = new THREE.Object3D();
 
       function disposeGrp(grp) {
+        const geos = new Set();
+        const mats = new Set();
         grp.traverse((o) => {
           if (!o.isMesh && !o.isInstancedMesh && !o.isPoints) return;
-          if (o.geometry) o.geometry.dispose();
+          if (o.geometry) geos.add(o.geometry);
           const mm = Array.isArray(o.material) ? o.material : [o.material];
           mm.forEach((m) => {
-            if (!m) return;
-            if (typeof panelMaterials !== "undefined" && panelMaterials.includes(m)) return;
-            if (m.map) m.map.dispose();
-            if (m.bumpMap) m.bumpMap.dispose();
-            m.dispose();
+            if (m) mats.add(m);
           });
         });
+        geos.forEach((g) => g.dispose());
+        const texs = new Set();
+        mats.forEach((m) => {
+          if (typeof panelMaterials !== "undefined" && panelMaterials.includes(m)) return;
+          if (m.map) texs.add(m.map);
+          if (m.bumpMap) texs.add(m.bumpMap);
+          m.dispose();
+        });
+        texs.forEach((t) => t.dispose());
       }
 
       function buildNightSkyTexture(S) {
@@ -4499,6 +4566,10 @@
           l.visible = false;
           l.userData.corridorSconce = false;
         });
+        SCONCE_SLOTS.length = 0;
+        sconceAnchorZ = Infinity;
+        shadowAnchorX = Infinity;
+        shadowAnchorZ = Infinity;
         const grp = new THREE.Group(),
           panels = [];
         const nP = seq ? seq.length : TOTAL_TRIALS;
@@ -4530,10 +4601,13 @@
         });
         const skyR = Math.max(280, cLen * 0.82);
         const skyCenter = new THREE.Vector3(0, 18, cZ0 - cLen / 2);
-        const sky = new THREE.Mesh(new THREE.SphereGeometry(skyR, 72, 40), skyMat);
+        const sky = new THREE.Mesh(new THREE.SphereGeometry(skyR, 32, 20), skyMat);
         sky.position.copy(skyCenter);
         sky.castShadow = false;
         sky.receiveShadow = false;
+        sky.frustumCulled = false;
+        sky.updateMatrix();
+        sky.matrixAutoUpdate = false;
         grp.add(sky);
 
         const moonDir = new THREE.Vector3(0.55, 0.42, -0.72).normalize();
@@ -4720,6 +4794,8 @@
           inner.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
           inner.receiveShadow = true;
           inner.castShadow = false;
+          inner.updateMatrix();
+          inner.matrixAutoUpdate = false;
           grp.add(inner);
           stat(new THREE.BoxGeometry(wallT, wallH, wallLen), wallCoreMat.clone(), xCenter, wallH / 2 - 0.12, wallMidZ);
           stat(
@@ -4745,7 +4821,6 @@
           specular: 0xffe090,
           shininess: 48,
         });
-        let sconceIdx = 0;
         for (let i = 0; i < nP; i++) {
           const gz = cZ0 - PAINT_Z0 - i * PAINT_SPACING;
           const side = i % 2 === 0 ? -1 : 1;
@@ -4758,12 +4833,13 @@
             sy,
             gz + 0.55,
           );
-          if (EEG_FOCUSED_MODE && sconceIdx < SCONCE_LIGHTS.length && i % 2 === 0) {
-            const sl = SCONCE_LIGHTS[sconceIdx++];
-            sl.position.set(sx * 0.92, sy, gz + 0.55);
-            sl.intensity = 0.42 + (i % 3) * 0.06;
-            sl.visible = true;
-            sl.userData.corridorSconce = true;
+          if (EEG_FOCUSED_MODE && i % 2 === 0) {
+            SCONCE_SLOTS.push({
+              x: sx * 0.92,
+              y: sy,
+              z: gz + 0.55,
+              intensity: 0.42 + (i % 3) * 0.06,
+            });
           }
         }
 
@@ -4811,81 +4887,91 @@
           64,
         );
         const ringLipGeo = new THREE.TorusGeometry(frameInnerR + 0.03, 0.05, 10, 56);
+        const inlayGeo = new THREE.RingGeometry(frameInnerR - 0.08, frameInnerR, 56);
+        const ringMap = TX.gateRing.clone();
+        ringMap.repeat.set(1, 1);
+        ringMap.needsUpdate = true;
+        const ringBump = BUMP_WALL.clone();
+        ringBump.repeat.set(3.5, 3.5);
+        ringBump.needsUpdate = true;
+        const ringMat = new THREE.MeshStandardMaterial({
+          color: 0xd4a050,
+          map: ringMap,
+          bumpMap: ringBump,
+          bumpScale: 0.07,
+          roughness: 0.62,
+          metalness: 0.18,
+          emissive: 0x1a1008,
+          side: THREE.DoubleSide,
+        });
+        const ringGlowMat = ringMat.clone();
+        ringGlowMat.color.setHex(0xf0c060);
+        ringGlowMat.emissive.setHex(0xb07020);
+        ringGlowMat.emissiveIntensity = 0.85;
+        const ringBodyMat = new THREE.MeshStandardMaterial({
+          color: 0xb88840,
+          map: TX.goldstone.clone(),
+          bumpMap: ringBump,
+          bumpScale: 0.06,
+          roughness: 0.7,
+          metalness: 0.12,
+          emissive: 0x140e06,
+        });
+        const inlayMat = new THREE.MeshStandardMaterial({
+          color: 0xe8b848,
+          emissive: 0x3a2008,
+          roughness: 0.35,
+          metalness: 0.55,
+          side: THREE.DoubleSide,
+        });
+        const inlayGlowMat = inlayMat.clone();
+        inlayGlowMat.color.setHex(0xffd060);
+        inlayGlowMat.emissive.setHex(0x8a4010);
+        function pinMesh(m) {
+          m.updateMatrix();
+          m.matrixAutoUpdate = false;
+          return m;
+        }
         for (let i = 0; i < nP; i++) {
           const gi = seq && seq[i] != null ? seq[i] : randInt(N_GLYPHS),
             pz = cZ0 - PAINT_Z0 - i * PAINT_SPACING;
-          const ringMap = TX.gateRing.clone();
-          ringMap.repeat.set(1, 1);
-          ringMap.needsUpdate = true;
-          const ringBump = BUMP_WALL.clone();
-          ringBump.repeat.set(3.5, 3.5);
-          ringBump.needsUpdate = true;
-          const ringMat = new THREE.MeshStandardMaterial({
-            color: 0xd4a050,
-            map: ringMap,
-            bumpMap: ringBump,
-            bumpScale: 0.07,
-            roughness: 0.62,
-            metalness: 0.18,
-            emissive: 0x1a1008,
-            side: THREE.DoubleSide,
-          });
-          const ringGlowMat = ringMat.clone();
-          ringGlowMat.color.setHex(0xf0c060);
-          ringGlowMat.emissive.setHex(0xb07020);
-          ringGlowMat.emissiveIntensity = 0.85;
-          const ringBodyMat = new THREE.MeshStandardMaterial({
-            color: 0xb88840,
-            map: TX.goldstone.clone(),
-            bumpMap: ringBump.clone(),
-            bumpScale: 0.06,
-            roughness: 0.7,
-            metalness: 0.12,
-            emissive: 0x140e06,
-          });
-          const ring = new THREE.Mesh(ringFaceGeo.clone(), ringMat);
+          const ring = new THREE.Mesh(ringFaceGeo, ringMat);
           ring.position.set(0, gateCenterY, pz + 0.02);
           ring.renderOrder = 2;
           ring.castShadow = false;
           ring.receiveShadow = true;
+          pinMesh(ring);
           grp.add(ring);
-          const ringBody = new THREE.Mesh(ringOuterGeo.clone(), ringBodyMat);
+          const ringBody = new THREE.Mesh(ringOuterGeo, ringBodyMat);
           ringBody.position.set(0, gateCenterY, pz + 0.01);
           ringBody.castShadow = true;
           ringBody.receiveShadow = true;
+          pinMesh(ringBody);
           grp.add(ringBody);
-          const inlayMat = new THREE.MeshStandardMaterial({
-            color: 0xe8b848,
-            emissive: 0x3a2008,
-            roughness: 0.35,
-            metalness: 0.55,
-            side: THREE.DoubleSide,
-          });
-          const inlayGlowMat = inlayMat.clone();
-          inlayGlowMat.color.setHex(0xffd060);
-          inlayGlowMat.emissive.setHex(0x8a4010);
-          const inlay = new THREE.Mesh(new THREE.RingGeometry(frameInnerR - 0.08, frameInnerR, 56), inlayMat);
+          const inlay = new THREE.Mesh(inlayGeo, inlayMat);
           inlay.position.set(0, gateCenterY, pz + 0.024);
           inlay.renderOrder = 1;
+          pinMesh(inlay);
           grp.add(inlay);
-          const lip = new THREE.Mesh(ringLipGeo.clone(), inlayMat.clone());
+          const lip = new THREE.Mesh(ringLipGeo, inlayMat);
           lip.position.set(0, gateCenterY, pz + 0.012);
+          pinMesh(lip);
           grp.add(lip);
-          const backer = new THREE.Mesh(backerGeo.clone(), gateBackerMat);
+          const backer = new THREE.Mesh(backerGeo, gateBackerMat);
           backer.position.set(0, gateCenterY, pz + 0.008);
           backer.renderOrder = 0;
+          pinMesh(backer);
           grp.add(backer);
           const glyphMat =
-            panelMaterials && panelMaterials[gi]
-              ? panelMaterials[gi].clone()
-              : glyphFallbackMat;
-          const glyph = new THREE.Mesh(glyphGeo.clone(), glyphMat);
+            panelMaterials && panelMaterials[gi] ? panelMaterials[gi] : glyphFallbackMat;
+          const glyph = new THREE.Mesh(glyphGeo, glyphMat);
           glyph.userData.panelIdx = i;
           glyph.position.set(0, gateCenterY, pz + 0.03);
           glyph.renderOrder = 3;
           glyph.visible = false;
           glyph.castShadow = false;
           glyph.receiveShadow = false;
+          pinMesh(glyph);
           grp.add(glyph);
           panels.push({
             z: pz,
@@ -4972,6 +5058,8 @@
 
         scene.add(grp);
         worldGrp = grp;
+        syncSconceLights(true);
+        syncSunShadow(true);
         const xM = halfW - 0.05;
         const lastPanelZ = panels.length ? panels[panels.length - 1].z : cZ1;
         // Stop well before the back wall so the end frame is not mistaken for a 71st painting.
@@ -5357,6 +5445,7 @@
 
       const muzzleFlash = new THREE.PointLight(0xffaa44, 0, 8);
       muzzleFlash.position.set(0, 0, -0.56);
+      muzzleFlash.visible = false;
       gunGroup.add(muzzleFlash);
       const muzzleCone = new THREE.Mesh(
         new THREE.ConeGeometry(0.015, 0.06, 8),
@@ -5436,6 +5525,7 @@
           recoil = Math.max(0, recoil - 0.08);
           mflash = Math.max(0, mflash - 0.1);
           muzzleFlash.intensity = 0;
+          muzzleFlash.visible = false;
           muzzleCone.material.opacity = 0;
           return;
         }
@@ -5447,11 +5537,13 @@
         gunGroup.position.set(0.22, -0.18 + bob, -0.32 + kickZ);
         gunGroup.rotation.set(-kickR * 0.5, 0, kickR * 0.3);
         if (mflash > 0) {
+          muzzleFlash.visible = true;
           muzzleFlash.intensity = mflash * 10;
           muzzleCone.material.opacity = mflash * 0.8;
           mflash = Math.max(0, mflash - 0.08);
         } else {
           muzzleFlash.intensity = 0;
+          muzzleFlash.visible = false;
           muzzleCone.material.opacity = 0;
         }
       }
@@ -6949,6 +7041,10 @@
           l.intensity = 0;
           l.userData.corridorSconce = false;
         });
+        SCONCE_SLOTS.length = 0;
+        sconceAnchorZ = Infinity;
+        shadowAnchorX = Infinity;
+        shadowAnchorZ = Infinity;
         game.world = null;
         game.seq = [];
         game.sequenceSeed = "";
@@ -7249,6 +7345,7 @@
       function prepareExitCorridor() {
         document.body.classList.remove("in-corridor");
         GATE_LIGHT.intensity = 0;
+        GATE_LIGHT.visible = false;
         clearBullets();
         gunGroup.visible = false;
         crosshairRing.classList.remove("aim");
@@ -7929,6 +8026,7 @@
             if (p.inlay && p.inlayGlowMat) p.inlay.material = p.inlayGlowMat;
             GATE_LIGHT.position.set(0, 2.55, p.z + 0.15);
             GATE_LIGHT.intensity = 1.05;
+            GATE_LIGHT.visible = true;
             GATE_LIGHT.color.setHex(0xd8e8ff);
             if (bloomPass) {
               bloomPass.strength = 0.58;
@@ -8717,14 +8815,12 @@
           }
         }
         lastT = t;
-        MoonGradeShader.uniforms.time.value = t * 0.001;
 
         const inCorridor = game.phase === "corridor" && game.world;
+        const showWorld =
+          !!game.world && (inCorridor || game.phase === "paused" || game.phase === "busy");
         if (inCorridor) {
           moveCam(dt, game.world.cBound);
-          sunLight.position.set(cam.position.x + 32, 58, cam.position.z - 42);
-          sunLight.target.position.set(cam.position.x, 0, cam.position.z - 10);
-          sunLight.target.updateMatrixWorld();
           const paintTotal = trialTotalForGame();
           if (!game.awaitingResponse && !game.blockComplete && game.nextIdx < paintTotal) {
             const p = game.world.panels[game.nextIdx];
@@ -8733,15 +8829,22 @@
             }
           }
           if ((hudTick++ & 3) === 0) hudUpdate();
-          updateTorchPulse();
+          if (!EEG_FOCUSED_MODE) updateTorchPulse();
+        }
+        if (showWorld) {
+          syncSunShadow();
+          syncSconceLights();
         }
 
         if (game.phase === "corridor") {
           updateBullets(dt);
-          drawGun(t);
+          if (!EEG_FOCUSED_MODE) drawGun(t);
         }
         updateFXParticles(dt);
-        renderScene();
+        if (showWorld) {
+          MoonGradeShader.uniforms.time.value = t * 0.001;
+          renderScene();
+        }
       }
 
       function spawnTitleGlyphs() {
