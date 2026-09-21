@@ -205,16 +205,17 @@ python3 -m http.server 4173 --bind 127.0.0.1
 
 Then:
 
-1. Start BrainVision LSL Connector (EEG on LSL).
-2. Open LabRecorder, refresh, select EEG + `GLYPHMIND_Markers`, record.
+1. Start BrainVision LSL Connector (EEG on LSL). **Required**; without it the `.xdf` is markers-only.
+2. Open LabRecorder, refresh, select **both** EEG + `GLYPHMIND_Markers`, then record. If only markers appear, do not start the participant.
 3. Optional: live view with `python3 scripts/live_eeg_viewer.py` (EEG + markers on screen).
 4. Open `http://127.0.0.1:4173` in Chrome.
 5. Confirm marker status is connected. Start the participant.
 6. Download the Excel file at the end. Stop LabRecorder.
+7. Verify EEG is in the file: `python plot_xdf.py your_recording.xdf` (must list an EEG stream, not markers alone).
 
 Photodiode (optional): long flash = stim, double flash = response, on the bottom-right square.
 
-After recording:
+After recording (event table only, not waveforms):
 
 ```bash
 python3 scripts/compact_eeg_events.py \
