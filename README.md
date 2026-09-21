@@ -207,9 +207,10 @@ Then:
 
 1. Start BrainVision LSL Connector (EEG on LSL).
 2. Open LabRecorder, refresh, select EEG + `GLYPHMIND_Markers`, record.
-3. Open `http://127.0.0.1:4173` in Chrome.
-4. Confirm marker status is connected. Start the participant.
-5. Download the Excel file at the end. Stop LabRecorder.
+3. Optional: live view with `python3 scripts/live_eeg_viewer.py` (EEG + markers on screen).
+4. Open `http://127.0.0.1:4173` in Chrome.
+5. Confirm marker status is connected. Start the participant.
+6. Download the Excel file at the end. Stop LabRecorder.
 
 Photodiode (optional): long flash = stim, double flash = response, on the bottom-right square.
 

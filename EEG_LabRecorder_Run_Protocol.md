@@ -15,6 +15,7 @@ This is not the BrainVision Recorder path. BrainVision Recorder does not read th
 | BrainVision LSL Connector | Puts actiCHamp EEG on LSL |
 | `lsl_marker_bridge.py` | Takes markers from the game and puts them on LSL as `GLYPHMIND_Markers` |
 | LabRecorder | Records EEG + markers into one `.xdf` file |
+| `live_eeg_viewer.py` | Live plot of EEG + markers (does not record) |
 | Game in the browser | Shows the task and sends markers to the bridge |
 | Game Excel download | Behavioral data (accuracy, RT, and so on) |
 
@@ -93,6 +94,30 @@ Leave this terminal running.
 4. You should also see `GLYPHMIND_Markers`.
 5. Select both.
 6. Do not click Record yet. Wait until the title screen is ready (Step 5).
+
+### Step 3b. Live EEG + markers (optional)
+
+In a third terminal (bridge and game still running):
+
+```bash
+cd /Users/sharm/echoes-of-sekhet
+source .venv-eeg/bin/activate
+pip install -r scripts/requirements-eeg.txt
+python3 scripts/live_eeg_viewer.py
+```
+
+A window opens with scrolling EEG. Red lines are game markers.
+
+Useful options:
+
+```bash
+python3 scripts/live_eeg_viewer.py --channels 0,1,2 --window 8
+python3 scripts/live_eeg_viewer.py --eeg-name "actiCHamp"
+```
+
+If it cannot find EEG, it prints the streams it can see. Match `--eeg-name` or `--eeg-type` to your LSL Connector.
+
+You can run the live viewer and LabRecorder at the same time. The viewer does not save a file.
 
 ### Step 4. Game server
 
