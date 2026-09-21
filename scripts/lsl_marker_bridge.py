@@ -53,9 +53,26 @@ def make_outlet() -> StreamOutlet:
 
 
 def format_marker(payload: dict) -> str:
+    """Encode IDs into the LSL string so XDF alone can key epochs.
+
+    Example: 10:STIM_ONSET:b1:t12:n3:scored
+    """
     code = payload.get("code", "")
     label = payload.get("label", "")
-    return f"{code}:{label}"
+    parts = [f"{code}:{label}"]
+    block = payload.get("block")
+    trial = payload.get("trial")
+    nback = payload.get("nback")
+    trial_type = payload.get("trialType")
+    if block not in (None, ""):
+        parts.append(f"b{block}")
+    if trial not in (None, ""):
+        parts.append(f"t{trial}")
+    if nback not in (None, ""):
+        parts.append(f"n{nback}")
+    if trial_type:
+        parts.append(str(trial_type))
+    return ":".join(parts)
 
 
 class MarkerLogger:
@@ -135,10 +152,10 @@ async def handle_client(websocket, outlet: StreamOutlet, logger: MarkerLogger) -
 async def main_async(host: str, port: int, log_path: Path | None) -> None:
     outlet = make_outlet()
     logger = MarkerLogger(log_path)
-    print(f"[bridge] LSL outlet ready: {STREAM_NAME} ({STREAM_TYPE})")
-    print(f"[bridge] WebSocket listening on ws://{host}:{port}")
+    print(f"[bridge] LSL outlet ready: {STREAM_NAME} ({STREAM_TYPE})", flush=True)
+    print(f"[bridge] WebSocket listening on ws://{host}:{port}", flush=True)
     if log_path:
-        print(f"[bridge] CSV log: {log_path}")
+        print(f"[bridge] CSV log: {log_path}", flush=True)
 
     async with websockets.serve(
         lambda ws: handle_client(ws, outlet, logger),

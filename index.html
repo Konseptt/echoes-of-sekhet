@@ -1047,7 +1047,11 @@
       #photodiode.show {
         display: block;
       }
-      #photodiode.flash {
+      /* Optical codes for one photodiode → EEG trigger channel:
+         stim = one long pulse; response = two short pulses. */
+      #photodiode.flash,
+      #photodiode.flash-stim,
+      #photodiode.flash-resp {
         background: #fff;
       }
       #eeg-bridge-status {
@@ -2859,7 +2863,7 @@
         <div class="toggle-switch" id="t-longglow" role="switch" aria-checked="false" tabindex="0"></div>
       </div>
       <div class="toggle-row">
-        <span class="toggle-label">TRIAL FLASH MARKER</span>
+        <span class="toggle-label">PHOTODIODE (STIM + RESP)</span>
         <div class="toggle-switch on" id="t-photodiode" role="switch" aria-checked="true" tabindex="0"></div>
       </div>
       <div class="pdiv"></div>
@@ -3014,7 +3018,7 @@
             <span id="eeg-bridge-dot"></span>
             <span id="eeg-bridge-text">Marker bridge: checking…</span>
           </div>
-          <span class="eeg-hint">Photodiode backup: bottom-right square (Accessibility).</span>
+          <span class="eeg-hint">Photodiode: long flash = stim onset, double flash = response (bottom-right).</span>
         </div>
       </div>
 
@@ -5563,12 +5567,77 @@
         eegmarkers: true,
       };
 
-      let photodiodeTimer = null;
-      function flashPhotodiode() {
-        if (!accessibility.photodiode || !photodiode) return;
-        photodiode.classList.add("show", "flash");
-        if (photodiodeTimer) clearTimeout(photodiodeTimer);
-        photodiodeTimer = setTimeout(() => photodiode.classList.remove("flash"), 120);
+      // Optical patterns (one diode → actiCHamp trigger channel):
+      //   stim: single white pulse 120 ms
+      //   resp: two 40 ms pulses separated by 40 ms black (distinct on EEG)
+      // Resp never cancels an in-flight stim pulse (queues after stim ends).
+      const PHOTODIODE_STIM_MS = 120;
+      const PHOTODIODE_RESP_ON_MS = 40;
+      const PHOTODIODE_RESP_GAP_MS = 40;
+      const PHOTODIODE_FLASH_CLASSES = ["flash", "flash-stim", "flash-resp"];
+      let photodiodeTimers = [];
+      let photodiodeBusyUntil = 0;
+
+      function clearPhotodiodeTimers() {
+        photodiodeTimers.forEach((id) => clearTimeout(id));
+        photodiodeTimers = [];
+      }
+
+      function schedulePhotodiode(fn, ms) {
+        photodiodeTimers.push(setTimeout(fn, ms));
+      }
+
+      function resetPhotodiodeFlashClasses() {
+        if (!photodiode) return;
+        PHOTODIODE_FLASH_CLASSES.forEach((c) => photodiode.classList.remove(c));
+      }
+
+      function runRespPhotodiodePulse() {
+        resetPhotodiodeFlashClasses();
+        photodiode.classList.add("show", "flash-resp");
+        const total =
+          PHOTODIODE_RESP_ON_MS * 2 + PHOTODIODE_RESP_GAP_MS;
+        photodiodeBusyUntil = performance.now() + total;
+        schedulePhotodiode(() => {
+          photodiode.classList.remove("flash-resp");
+        }, PHOTODIODE_RESP_ON_MS);
+        schedulePhotodiode(() => {
+          photodiode.classList.add("flash-resp");
+        }, PHOTODIODE_RESP_ON_MS + PHOTODIODE_RESP_GAP_MS);
+        schedulePhotodiode(() => {
+          photodiode.classList.remove("flash-resp");
+        }, total);
+      }
+
+      /**
+       * @param {"stim"|"resp"} kind
+       * @returns {string} pattern id logged with LSL / Events sheet
+       */
+      function flashPhotodiode(kind) {
+        if (!accessibility.photodiode || !photodiode) return "";
+        photodiode.classList.add("show");
+
+        if (kind === "resp") {
+          const now = performance.now();
+          const delay = Math.max(0, photodiodeBusyUntil - now);
+          if (delay > 0) {
+            // Finish stim pulse first so optical codes stay decodable.
+            schedulePhotodiode(runRespPhotodiodePulse, delay);
+          } else {
+            clearPhotodiodeTimers();
+            runRespPhotodiodePulse();
+          }
+          return "resp_double_40_40_40";
+        }
+
+        clearPhotodiodeTimers();
+        resetPhotodiodeFlashClasses();
+        photodiode.classList.add("flash-stim");
+        photodiodeBusyUntil = performance.now() + PHOTODIODE_STIM_MS;
+        schedulePhotodiode(() => {
+          photodiode.classList.remove("flash-stim");
+        }, PHOTODIODE_STIM_MS);
+        return "stim_long_120";
       }
 
       function syncPhotodiodeVisibility() {
@@ -5577,10 +5646,14 @@
           "show",
           accessibility.photodiode && game && game.phase === "corridor",
         );
-        if (!accessibility.photodiode) photodiode.classList.remove("flash");
+        if (!accessibility.photodiode || (game && game.phase === "paused")) {
+          clearPhotodiodeTimers();
+          resetPhotodiodeFlashClasses();
+          photodiodeBusyUntil = 0;
+        }
       }
 
-      const MARKER_PROTOCOL_VERSION = 1;
+      const MARKER_PROTOCOL_VERSION = 3;
       const MARKER_CODES = {
         SESSION_START: 1,
         STIM_ONSET: 10,
@@ -5688,11 +5761,15 @@
           markerProtocolVersion: MARKER_PROTOCOL_VERSION,
           ...extra,
         };
+        const delivered =
+          !!(accessibility.eegmarkers && eegBridge.ws && eegBridge.connected);
+        evt.delivered = delivered ? 1 : 0;
         markerLog.push(evt);
-        if (accessibility.eegmarkers && eegBridge.ws && eegBridge.connected) {
+        if (delivered) {
           try {
             eegBridge.ws.send(JSON.stringify(evt));
           } catch (err) {
+            evt.delivered = 0;
             console.warn("LSL marker send failed:", err);
           }
         }
@@ -6295,6 +6372,11 @@
             ["eegBridgeUrl", readEegBridgeUrl()],
             ["eegMarkersEnabled", accessibility.eegmarkers ? 1 : 0],
             ["photodiodeEnabled", accessibility.photodiode ? 1 : 0],
+            ["photodiodeStimPattern", "stim_long_120"],
+            ["photodiodeRespPattern", "resp_double_40_40_40"],
+            ["photodiodeStimMs", PHOTODIODE_STIM_MS],
+            ["photodiodeRespOnMs", PHOTODIODE_RESP_ON_MS],
+            ["photodiodeRespGapMs", PHOTODIODE_RESP_GAP_MS],
             ["timezone", Intl.DateTimeFormat().resolvedOptions().timeZone || ""],
             ["userAgent", navigator.userAgent || ""],
             ["PID", pid],
@@ -6330,6 +6412,9 @@
             "trial",
             "nback",
             "trialType",
+            "photodiodePattern",
+            "rtMs",
+            "delivered",
             "extra",
           ];
           const eventRows = markerLog.map((e) => [
@@ -6344,6 +6429,9 @@
             e.trial != null ? e.trial : "",
             e.nback != null ? e.nback : "",
             e.trialType || "",
+            e.photodiodePattern || "",
+            e.rtMs != null ? e.rtMs : "",
+            e.delivered != null ? e.delivered : "",
             e.extra || "",
           ]);
           const eventsSheet = XLSX.utils.aoa_to_sheet([eventHeaders, ...eventRows]);
@@ -6873,6 +6961,10 @@
         
         game._pauseStart = performance.now();
         pauseAllTimers();
+        clearPhotodiodeTimers();
+        resetPhotodiodeFlashClasses();
+        photodiodeBusyUntil = 0;
+        if (game) game._onsetPending = false;
         
         accessibilitySubmenu.classList.remove("show");
         game._prev = game.phase;
@@ -7727,6 +7819,7 @@
         _prev: "corridor",
         nextIdx: 0,
         awaitingResponse: false,
+        _onsetPending: false,
         currentTrialIdx: -1,
         respondedCount: 0,
         blockComplete: false,
@@ -8000,27 +8093,98 @@
           }
           
           p.revealed = true;
-          p.revealTime = performance.now();
-          p.rsi = this.lastEventTime > 0 ? p.revealTime - this.lastEventTime : 0;
-          flashPhotodiode();
-          const stimCode =
-            p.idx < this.N ? MARKER_CODES.STIM_OBSERVE : MARKER_CODES.STIM_ONSET;
-          sendEegMarker(stimCode, {
-            trial: p.idx + 1,
-            nback: this.N,
-            trialType: this.isPracticePhase
-              ? "practice"
-              : p.idx < this.N
-                ? "warmup"
-                : "scored",
-          });
-          
-          sounds.panel();
-          sounds.chime();
-
+          this._onsetPending = true;
+          // Show glyph before optical/LSL onset so markers do not lead the pixels.
           if (panelMaterials) p.mesh.material = panelMaterials[p.gi];
           p.mesh.visible = true;
           p.glyphHidden = false;
+
+          const stimCode =
+            p.idx < this.N ? MARKER_CODES.STIM_OBSERVE : MARKER_CODES.STIM_ONSET;
+          const stimTrialType = this.isPracticePhase
+            ? "practice"
+            : p.idx < this.N
+              ? "warmup"
+              : "scored";
+          const panelIdx = p.idx;
+          const self = this;
+
+          const afterStimOnset = () => {
+            p.revealTime = performance.now();
+            p.rsi = self.lastEventTime > 0 ? p.revealTime - self.lastEventTime : 0;
+            const pdPattern = flashPhotodiode("stim");
+            sendEegMarker(stimCode, {
+              trial: panelIdx + 1,
+              nback: self.N,
+              trialType: stimTrialType,
+              photodiodePattern: pdPattern,
+            });
+            self._onsetPending = false;
+
+            if (self.isTutorialPhase) {
+              self.lastEventTime = p.revealTime;
+              if (panelIdx < self.N) {
+                self.awaitingResponse = false;
+                self.currentTrialIdx = -1;
+                showKhenuTutorialStep(panelIdx, "observe");
+              } else {
+                p.tutMiss = 0;
+                self.awaitingResponse = true;
+                self.currentTrialIdx = panelIdx;
+                gamePrompt.textContent =
+                  "Answer MATCH or NO MATCH to pass the gate \u00b7 you may step back or aside";
+                showKhenuTutorialStep(panelIdx, "answer");
+              }
+              hudUpdate(true);
+              return;
+            }
+
+            if (panelIdx < self.N) {
+              if (!self.isPracticePhase && !self.isTutorialPhase) {
+                logger.recordWarmup({
+                  trialIdx: panelIdx,
+                  n: self.N,
+                  glyphIdx: self.seq[panelIdx],
+                  rsi: p.rsi,
+                  sequenceSeed: self.sequenceSeed,
+                  stimMarkerCode: stimCode,
+                  revealPerfMs: p.revealTime,
+                });
+              }
+              self.lastEventTime = p.revealTime;
+              self.awaitingResponse = false;
+              self.currentTrialIdx = -1;
+              hudUpdate(true);
+              return;
+            }
+
+            self.awaitingResponse = true;
+            self.currentTrialIdx = panelIdx;
+            if (!self.isPracticePhase && !self.isTutorialPhase) {
+              logger.record({
+                trialIdx: panelIdx,
+                n: self.N,
+                glyphIdx: self.seq[panelIdx],
+                nbackGlyphIdx: self.seq[panelIdx - self.N],
+                rsi: p.rsi,
+                sequenceSeed: self.sequenceSeed,
+                stimMarkerCode: stimCode,
+                revealPerfMs: p.revealTime,
+              });
+            }
+            gamePrompt.textContent =
+              "Answer MATCH or NO MATCH to pass the gate \u00b7 you may step back or aside";
+            hudUpdate(true);
+          };
+
+          // Double-rAF ≈ after the frame that paints the newly visible glyph.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(afterStimOnset);
+          });
+
+          sounds.panel();
+          sounds.chime();
+
           if (!EEG_FOCUSED_MODE) {
             if (p.ring && p.ringGlowMat) p.ring.material = p.ringGlowMat;
             if (p.inlay && p.inlayGlowMat) p.inlay.material = p.inlayGlowMat;
@@ -8042,63 +8206,6 @@
 
           this.nextIdx = p.idx + 1;
           this.hudPaint = p.idx;
-
-          if (this.isTutorialPhase) {
-            this.lastEventTime = p.revealTime;
-            if (p.idx < this.N) {
-              this.awaitingResponse = false;
-              this.currentTrialIdx = -1;
-              showKhenuTutorialStep(p.idx, "observe");
-            } else {
-              p.tutMiss = 0;
-              this.awaitingResponse = true;
-              this.currentTrialIdx = p.idx;
-              gamePrompt.textContent =
-                "Answer MATCH or NO MATCH to pass the gate \u00b7 you may step back or aside";
-              showKhenuTutorialStep(p.idx, "answer");
-            }
-            hudUpdate(true);
-            return;
-          }
-
-          // Warmup/Observe trials: No response required
-          if (p.idx < this.N) {
-            if (!this.isPracticePhase && !this.isTutorialPhase) {
-              logger.recordWarmup({
-                trialIdx: p.idx,
-                n: this.N,
-                glyphIdx: this.seq[p.idx],
-                rsi: p.rsi,
-                sequenceSeed: this.sequenceSeed,
-                stimMarkerCode: stimCode,
-                revealPerfMs: p.revealTime,
-              });
-            }
-            this.lastEventTime = p.revealTime;
-            this.awaitingResponse = false;
-            this.currentTrialIdx = -1;
-            hudUpdate(true);
-            return;
-          }
-
-          // Scored trials: Player must decide if it's a match
-          this.awaitingResponse = true;
-          this.currentTrialIdx = p.idx;
-          if (!this.isPracticePhase && !this.isTutorialPhase) {
-            logger.record({
-              trialIdx: p.idx,
-              n: this.N,
-              glyphIdx: this.seq[p.idx],
-              nbackGlyphIdx: this.seq[p.idx - this.N],
-              rsi: p.rsi,
-              sequenceSeed: this.sequenceSeed,
-              stimMarkerCode: stimCode,
-              revealPerfMs: p.revealTime,
-            });
-          }
-          gamePrompt.textContent =
-            "Answer MATCH or NO MATCH to pass the gate \u00b7 you may step back or aside";
-          hudUpdate(true);
         },
 
         /**
@@ -8111,7 +8218,7 @@
           const i = this.currentTrialIdx;
           const panel = this.world && this.world.panels[i];
 
-          if (!panel || !panel.revealed || panel.responded) return;
+          if (!panel || !panel.revealed || !panel.revealTime || panel.responded) return;
 
           this.awaitingResponse = false;
           if (!EEG_FOCUSED_MODE) {
@@ -8125,6 +8232,20 @@
           const nbackGlyph = this.seq[i - this.N];
           const actualMatch = currentGlyph === nbackGlyph;
           const correct = (resp === 1 && actualMatch) || (resp === 2 && !actualMatch);
+
+          // Mark response at click time — before feedback/audio (those lag hardware/LSL).
+          const respCode = resp === 1 ? MARKER_CODES.RESP_MATCH : MARKER_CODES.RESP_NO_MATCH;
+          const pdPattern = flashPhotodiode("resp");
+          sendEegMarker(respCode, {
+            trial: i + 1,
+            nback: this.N,
+            trialType: this.isPracticePhase ? "practice" : "scored",
+            photodiodePattern: pdPattern,
+            rtMs: Math.round(rt),
+            ACC: correct ? 1 : 0,
+            CRESP: actualMatch ? 1 : 2,
+            isMatch: actualMatch ? 1 : 0,
+          });
 
           // Visual and audio feedback
           if (resp === 1 && !EEG_FOCUSED_MODE) {
@@ -8143,13 +8264,6 @@
           }
 
           showTrialFeedback(correct, this.isTutorialPhase);
-
-          const respCode = resp === 1 ? MARKER_CODES.RESP_MATCH : MARKER_CODES.RESP_NO_MATCH;
-          sendEegMarker(respCode, {
-            trial: i + 1,
-            nback: this.N,
-            trialType: this.isPracticePhase ? "practice" : "scored",
-          });
 
           if (this.isTutorialPhase) {
             if (!correct) {
@@ -8822,7 +8936,7 @@
         if (inCorridor) {
           moveCam(dt, game.world.cBound);
           const paintTotal = trialTotalForGame();
-          if (!game.awaitingResponse && !game.blockComplete && game.nextIdx < paintTotal) {
+          if (!game.awaitingResponse && !game._onsetPending && !game.blockComplete && game.nextIdx < paintTotal) {
             const p = game.world.panels[game.nextIdx];
             if (p && !p.revealed && Math.abs(cam.position.z - p.z) < REVEAL_DIST) {
               game.revealPanel(p);

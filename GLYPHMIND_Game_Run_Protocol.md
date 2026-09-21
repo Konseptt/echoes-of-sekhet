@@ -24,10 +24,12 @@ In the export, a full two-block session has **140 rows** (70 per block). Use `tr
 3. Load the task in Chrome, Firefox, Safari, or Edge. If `file://` fails, use a local server:
 
    ```bash
-   python3 -m http.server 8765 --bind 127.0.0.1
+   python3 -m http.server 4173 --bind 127.0.0.1
    ```
 
-   Then open `http://127.0.0.1:8765/index.html`.
+   Then open `http://127.0.0.1:4173/`.
+
+   For EEG with LabRecorder (EEG + markers in one `.xdf`), use [EEG_LabRecorder_Run_Protocol.md](./EEG_LabRecorder_Run_Protocol.md). Game port is **4173**. Marker bridge port is **8765**. Do not put the game server on 8765.
 
 4. Optional smoke test: `node scripts/verify-logic.mjs` (expect `All checks passed.`).
 5. Clear the download folder or confirm the last participant's file was moved.

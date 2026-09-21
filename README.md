@@ -181,21 +181,48 @@ python3 -m http.server 8080
 
 ## Operator checklist
 
-See **[GLYPHMIND_Game_Run_Protocol.md](./GLYPHMIND_Game_Run_Protocol.md)** for the full run sheet.
+See **[GLYPHMIND_Game_Run_Protocol.md](./GLYPHMIND_Game_Run_Protocol.md)** for the behavioral run sheet.
 
-## EEG / actiCHamp integration
+## EEG with LabRecorder (simple path)
 
-For Brain Products **actiCHamp** recording with LSL markers and photodiode backup, see **[ACTICHAMP_EEG_GUIDE.md](./ACTICHAMP_EEG_GUIDE.md)**.
+To record actiCHamp EEG and game markers in one `.xdf` file, follow:
 
-Quick start:
+**[EEG_LabRecorder_Run_Protocol.md](./EEG_LabRecorder_Run_Protocol.md)**
+
+That document is the step-by-step for daily use.
+
+Short version (two terminals, after the one-time venv install):
 
 ```bash
-pip install -r scripts/requirements-eeg.txt
+# Terminal 1: marker bridge
+cd /Users/sharm/echoes-of-sekhet
+source .venv-eeg/bin/activate
 python3 scripts/lsl_marker_bridge.py --log logs/markers.csv
-python3 -m http.server 4173
+
+# Terminal 2: game
+python3 -m http.server 4173 --bind 127.0.0.1
 ```
 
-Enable **SEND LSL MARKERS** on the title screen (default on). Photodiode flash remains on the bottom-right square.
+Then:
+
+1. Start BrainVision LSL Connector (EEG on LSL).
+2. Open LabRecorder, refresh, select EEG + `GLYPHMIND_Markers`, record.
+3. Open `http://127.0.0.1:4173` in Chrome.
+4. Confirm marker status is connected. Start the participant.
+5. Download the Excel file at the end. Stop LabRecorder.
+
+Photodiode (optional): long flash = stim, double flash = response, on the bottom-right square.
+
+After recording:
+
+```bash
+python3 scripts/compact_eeg_events.py \
+  --xdf your_recording.xdf \
+  --xlsx your_game_export.xlsx \
+  -o compact_events.csv
+```
+
+More amp and photodiode detail: **[ACTICHAMP_EEG_GUIDE.md](./ACTICHAMP_EEG_GUIDE.md)**.
 
 ## Technology
 
