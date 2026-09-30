@@ -3358,7 +3358,7 @@
         if (sceneComposer) {
           sceneComposer.setPixelRatio(renderer.getPixelRatio());
           sceneComposer.setSize(innerWidth, innerHeight);
-          // Bloom at CSS pixels (not DPR) — same look, far less fill-rate.
+          // Bloom at CSS pixels (not DPR) - same look, far less fill-rate.
           if (bloomPass) bloomPass.setSize(innerWidth, innerHeight);
           updatePostFxResolution();
         }
@@ -8233,7 +8233,7 @@
           const actualMatch = currentGlyph === nbackGlyph;
           const correct = (resp === 1 && actualMatch) || (resp === 2 && !actualMatch);
 
-          // Mark response at click time — before feedback/audio (those lag hardware/LSL).
+          // Mark response at click time - before feedback/audio (those lag hardware/LSL).
           const respCode = resp === 1 ? MARKER_CODES.RESP_MATCH : MARKER_CODES.RESP_NO_MATCH;
           const pdPattern = flashPhotodiode("resp");
           sendEegMarker(respCode, {

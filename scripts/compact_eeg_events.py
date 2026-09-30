@@ -323,7 +323,7 @@ def pair_stim_resp(markers: list[dict]) -> list[dict]:
                 and s["block"] == r["block"]
                 and s["trial"] == r["trial"]
             )
-            # Observe/warmup stims often have no response — skip pairing by key only.
+            # Observe/warmup stims often have no response - skip pairing by key only.
             if same_key:
                 match = (ri, r)
                 break
@@ -485,7 +485,7 @@ def main() -> None:
     n_resp = sum(1 for p in pairs if p.get("resp_code") not in ("", None))
     print(
         f"[compact] wrote {len(pairs)} stim rows "
-        f"({n_resp} with response) → {args.output}"
+        f"({n_resp} with response) -> {args.output}"
     )
     print(
         "[compact] Photodiode on EEG trigger: long pulse=stim, double pulse=response. "

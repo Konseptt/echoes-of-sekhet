@@ -275,7 +275,7 @@ function auditBlock(blockNum, rows, meta, issues, options) {
   }
 
   // runningAccuracy: cumulative correct/answered % (1 dp) over answered scored
-  // trials in trial order — mirrors index.html refreshRunningAccuracy.
+  // trials in trial order - mirrors index.html refreshRunningAccuracy.
   {
     const scored = rows
       .filter((r) => asStr(r.trialType) === "scored")

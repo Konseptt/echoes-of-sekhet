@@ -24,7 +24,7 @@ Browsers cannot speak LSL directly. The included Python bridge is the recommende
 3. **Photodiode backup (recommended):**
  - Affix a photodiode to the **bottom-right black square** on the game monitor (`#photodiode`).
  - Keep **PHOTODIODE (STIM + RESP)** enabled in Accessibility (on by default).
- - **Long** white pulse (~120 ms) = stimulus onset; **double** short pulse (40–40–40 ms) = response.
+ - **Long** white pulse (~120 ms) = stimulus onset; **double** short pulse (40-40-40 ms) = response.
 4. **Dedicated fullscreen display** for the participant; researcher uses a second screen for setup.
 
 ---
@@ -69,17 +69,17 @@ Protocol version **3** (see Meta `markerProtocolVersion`). The game emits numeri
 
 | Code | Label | When | Photodiode |
 |------|--------|------|------------|
-| 1 | `SESSION_START` | Participant session begins | — |
+| 1 | `SESSION_START` | Participant session begins | - |
 | 10 | `STIM_ONSET` | Scored gate glyph revealed | **Long** white pulse (~120 ms) |
 | 11 | `STIM_OBSERVE` | Observe-only gate revealed | **Long** white pulse (~120 ms) |
-| 20 | `RESP_MATCH` | Participant answered MATCH | **Double** short pulse (40–40–40 ms) |
-| 21 | `RESP_NO_MATCH` | Participant answered NO MATCH | **Double** short pulse (40–40–40 ms) |
-| 30 | `BLOCK_PRACTICE_START` | Practice corridor entered | — |
-| 31 | `BLOCK_SCORED_START` | Scored block corridor entered | — |
-| 40 | `BLOCK_END` | Block finished | — |
-| 50 | `SESSION_END` | Session complete (before export) | — |
-| 60 | `PAUSE_ON` | Pause menu opened | — |
-| 61 | `PAUSE_OFF` | Pause menu closed | — |
+| 20 | `RESP_MATCH` | Participant answered MATCH | **Double** short pulse (40-40-40 ms) |
+| 21 | `RESP_NO_MATCH` | Participant answered NO MATCH | **Double** short pulse (40-40-40 ms) |
+| 30 | `BLOCK_PRACTICE_START` | Practice corridor entered | - |
+| 31 | `BLOCK_SCORED_START` | Scored block corridor entered | - |
+| 40 | `BLOCK_END` | Block finished | - |
+| 50 | `SESSION_END` | Session complete (before export) | - |
+| 60 | `PAUSE_ON` | Pause menu opened | - |
+| 61 | `PAUSE_OFF` | Pause menu closed | - |
 
 LSL marker strings are formatted as `CODE:LABEL:b{block}:t{trial}:n{nback}:{trialType}` (example: `10:STIM_ONSET:b1:t12:n3:scored`). Events also carry `photodiodePattern`, `rtMs` (responses), and `delivered` (1 if WebSocket send succeeded).
 

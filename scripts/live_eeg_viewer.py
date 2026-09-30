@@ -6,12 +6,10 @@ Needs:
   - BrainVision LSL Connector (EEG on LSL)
   - scripts/lsl_marker_bridge.py (GLYPHMIND_Markers on LSL)
 
-Does not record. Run LabRecorder in parallel if you want an .xdf file.
-
-Example:
-  source .venv-eeg/bin/activate
-  python3 scripts/live_eeg_viewer.py
-  python3 scripts/live_eeg_viewer.py --channels 0,1,2 --window 8
+Usage:
+  python scripts/live_eeg_viewer.py
+  python scripts/live_eeg_viewer.py --montage all
+  python scripts/live_eeg_viewer.py --channels 0,1,2,3 --window 8
 """
 from __future__ import annotations
 
@@ -19,7 +17,7 @@ import argparse
 import sys
 import time
 from collections import deque
-from typing import Deque, List, Optional, Tuple
+from typing import Deque, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -36,8 +34,55 @@ except ImportError:
     print("Install matplotlib: pip install matplotlib", file=sys.stderr)
     raise
 
-
 MarkerEvent = Tuple[float, str]  # (lsl_time, label)
+
+# Standard actiCAP 32 montage with brain regions and functions
+CHANNEL_CATALOG: Dict[int, Tuple[str, str]] = {
+    0:  ("Fp1",  "Frontopolar L / Blink"),
+    1:  ("Fp2",  "Frontopolar R / Blink"),
+    2:  ("F3",   "Frontal L / DLPFC"),
+    3:  ("F4",   "Frontal R / DLPFC"),
+    4:  ("C3",   "Central L / Motor"),
+    5:  ("C4",   "Central R / Motor"),
+    6:  ("P3",   "Parietal L / Memory"),
+    7:  ("P4",   "Parietal R / Memory"),
+    8:  ("O1",   "Occipital L / Visual"),
+    9:  ("O2",   "Occipital R / Visual"),
+    10: ("F7",   "Frontolateral L"),
+    11: ("F8",   "Frontolateral R"),
+    12: ("T7",   "Temporal L / Auditory"),
+    13: ("T8",   "Temporal R / Auditory"),
+    14: ("P7",   "Temporoparietal L"),
+    15: ("P8",   "Temporoparietal R"),
+    16: ("Fz",   "Frontal Midline"),
+    17: ("Cz",   "Central Midline / Vertex"),
+    18: ("Pz",   "Parietal Midline / P300"),
+    19: ("Oz",   "Occipital Midline / Visual"),
+    20: ("FC1",  "Frontocentral L"),
+    21: ("FC2",  "Frontocentral R"),
+    22: ("CP1",  "Centroparietal L"),
+    23: ("CP2",  "Centroparietal R"),
+    24: ("FC5",  "Frontocentral L-Lat"),
+    25: ("FC6",  "Frontocentral R-Lat"),
+    26: ("CP5",  "Centroparietal L-Lat"),
+    27: ("CP6",  "Centroparietal R-Lat"),
+    28: ("TP9",  "Mastoid Ref L"),
+    29: ("TP10", "Mastoid Ref R"),
+    30: ("POz",  "Parieto-occipital Midline"),
+    31: ("ECG",  "Cardiac / AUX"),
+}
+for i in range(32, 40):
+    CHANNEL_CATALOG[i] = (f"AUX{i-31}", f"Auxiliary / Trigger {i-31}")
+
+# Core working memory and visual montage for N-back
+NBACK_CHANNELS = [0, 1, 2, 3, 16, 17, 4, 5, 6, 7, 18, 8, 9, 19]
+
+
+def get_channel_label(i: int, short: bool = False) -> str:
+    if i in CHANNEL_CATALOG:
+        name, desc = CHANNEL_CATALOG[i]
+        return f"{name}" if short else f"{name} ({desc})"
+    return f"Ch{i+1}"
 
 
 def resolve_one(prop: str, value: str, timeout: float, kind: str) -> StreamInlet:
@@ -82,21 +127,15 @@ def resolve_eeg(name_substr: str, eeg_type: str, timeout: float) -> StreamInlet:
     return resolve_one("type", eeg_type, timeout, "EEG")
 
 
-def parse_channels(spec: str, n_available: int) -> List[int]:
-    if not spec.strip():
-        return list(range(min(4, n_available)))
-    idxs = []
-    for part in spec.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        i = int(part)
-        if i < 0 or i >= n_available:
-            raise SystemExit(f"channel {i} out of range 0..{n_available - 1}")
-        idxs.append(i)
-    if not idxs:
-        raise SystemExit("no channels selected")
-    return idxs
+def detect_all_active_channels(inlet: StreamInlet, n_ch: int) -> List[int]:
+    """Sample a short chunk and detect channels with active variance."""
+    samples, _ = inlet.pull_chunk(timeout=0.8, max_samples=1000)
+    if not samples:
+        return list(range(min(32, n_ch)))
+    data = np.asarray(samples)
+    stds = np.std(data, axis=0)
+    active = [i for i in range(min(32, n_ch)) if stds[i] > 0.1]
+    return active if active else list(range(min(8, n_ch)))
 
 
 def main() -> None:
@@ -113,9 +152,15 @@ def main() -> None:
         help="LSL marker stream name (default: GLYPHMIND_Markers)",
     )
     ap.add_argument(
+        "--montage",
+        choices=["all", "active", "nback", "custom"],
+        default="all",
+        help="Montage preset: 'all', 'active', 'nback', or 'custom'",
+    )
+    ap.add_argument(
         "--channels",
         default="",
-        help="Comma-separated channel indices (default: first 4)",
+        help="Comma-separated channel indices if montage=custom (e.g. 0,1,2,3)",
     )
     ap.add_argument(
         "--window",
@@ -132,8 +177,8 @@ def main() -> None:
     ap.add_argument(
         "--scale",
         type=float,
-        default=50.0,
-        help="Vertical spacing between channels in plot units (default: 50)",
+        default=0.0,
+        help="Vertical spacing between channels in uV (default: auto)",
     )
     args = ap.parse_args()
 
@@ -146,77 +191,145 @@ def main() -> None:
         srate = 500.0
         print(f"[live] nominal_srate missing; assuming {srate} Hz")
 
-    ch_idxs = parse_channels(args.channels, n_ch)
-    ch_names = []
-    ch = eeg_info.desc().child("channels").child("channel")
-    for i in range(n_ch):
-        label = ch.child_value("label") or f"ch{i}"
-        ch_names.append(label)
-        ch = ch.next_sibling()
-    if len(ch_names) < n_ch:
-        ch_names = [f"ch{i}" for i in range(n_ch)]
+    def select_channels_for_mode(mode: str) -> List[int]:
+        if mode == "all":
+            return list(range(min(32, n_ch)))
+        elif mode == "active":
+            return detect_all_active_channels(eeg_inlet, n_ch)
+        elif mode == "nback":
+            return [i for i in NBACK_CHANNELS if i < n_ch]
+        elif mode == "custom":
+            if args.channels.strip():
+                idxs = [int(p.strip()) for p in args.channels.split(",") if p.strip()]
+                return [i for i in idxs if 0 <= i < n_ch]
+            return list(range(min(4, n_ch)))
+        return list(range(min(32, n_ch)))
 
-    # Resolve markers (optional but expected)
+    current_mode = args.montage
+    ch_idxs = select_channels_for_mode(current_mode)
+
+    scale = args.scale
+    if scale <= 0.0:
+        if len(ch_idxs) > 20:
+            scale = 35.0
+        elif len(ch_idxs) > 10:
+            scale = 50.0
+        else:
+            scale = 75.0
+
+    print(f"\n[live] actiCHamp connected ({srate:.0f} Hz, {n_ch} channels)")
+    print(f"[live] montage: {current_mode.upper()} ({len(ch_idxs)} channels)")
+    for ci in ch_idxs:
+        print(f"  [{ci:2d}] {get_channel_label(ci)}")
+
+    # Resolve markers
     marker_inlet: Optional[StreamInlet] = None
     try:
-        marker_inlet = resolve_one("name", args.marker_name, args.timeout, "Markers")
-    except SystemExit:
-        print(
-            "[live] continuing without markers. Start lsl_marker_bridge.py to enable them.",
-            file=sys.stderr,
-        )
+        found_markers = resolve_byprop("name", args.marker_name, timeout=1.0)
+        if found_markers:
+            marker_inlet = StreamInlet(found_markers[0], max_buflen=60, processing_flags=0)
+            print(f"[live] connected markers: {args.marker_name}")
+    except Exception:
+        pass
+    if marker_inlet is None:
+        print("[live] marker stream not detected yet; will attach when game starts.")
 
     window_s = max(1.0, args.window)
-    max_samples = int(window_s * srate) + 10
-    buffers: List[Deque[float]] = [deque(maxlen=max_samples) for _ in ch_idxs]
+    max_samples = int(window_s * srate) + 100
+
+    hardware_buffers: List[Deque[float]] = [deque(maxlen=max_samples) for _ in range(n_ch)]
     times: Deque[float] = deque(maxlen=max_samples)
-    markers: Deque[MarkerEvent] = deque(maxlen=200)
+    markers: Deque[MarkerEvent] = deque(maxlen=400)
 
-    t0 = time.time()
-    last_eeg_time: Optional[float] = None
+    decimate_step = max(1, int(srate / 250.0))
+    last_marker_display = ""
+    is_paused = False
 
-    fig, ax = plt.subplots(figsize=(12, 6))
-    fig.canvas.manager.set_window_title("GLYPHMIND live EEG + markers")
-    lines = []
-    for i, ci in enumerate(ch_idxs):
-        (ln,) = ax.plot([], [], lw=0.8, label=ch_names[ci] if ci < len(ch_names) else f"ch{ci}")
-        lines.append(ln)
+    fig = plt.figure(figsize=(15, 9))
+    fig.canvas.manager.set_window_title("GLYPHMIND - Live actiCHamp EEG + Markers")
+    ax = fig.add_subplot(111)
 
-    marker_vlines = []
-    marker_texts = []
-    status = ax.text(
-        0.01,
-        0.99,
-        "",
-        transform=ax.transAxes,
-        va="top",
-        ha="left",
-        fontsize=9,
-        family="monospace",
-        bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
-    )
+    lines: List[plt.Line2D] = []
 
-    ax.set_xlabel("time (s, relative)")
-    ax.set_ylabel("channels (offset)")
-    ax.set_title("Live EEG (LSL) with game markers")
-    ax.legend(loc="upper right", fontsize=8)
-    ax.grid(True, alpha=0.25)
+    def rebuild_plot_lines():
+        nonlocal lines, scale
+        ax.clear()
+        lines = []
+        for i, ci in enumerate(ch_idxs):
+            lbl = get_channel_label(ci, short=True)
+            (ln,) = ax.plot([], [], lw=0.9, label=lbl)
+            lines.append(ln)
+
+        y_ticks = [i * scale for i in range(len(ch_idxs))]
+        y_labels = [get_channel_label(ci, short=False) for ci in ch_idxs]
+        ax.set_yticks(y_ticks)
+        ax.set_yticklabels(y_labels, fontsize=8)
+
+        ax.set_xlim(-window_s, 0.2)
+        ax.set_ylim(-scale * 0.8, (len(ch_idxs) - 0.2) * scale)
+        ax.set_xlabel("Time (seconds relative to now)", fontsize=9)
+        ax.set_title(
+            f"actiCHamp EEG ({srate:.0f} Hz) | Montage: {current_mode.upper()} ({len(ch_idxs)} ch) | Scale: {scale:.0f} uV\n"
+            f"[Keys: 'a' All 32 | 'g' Active | 'n' N-back | '+' / '-' Scale | Space Pause]",
+            fontsize=10,
+            pad=10
+        )
+        ax.grid(True, alpha=0.2, linestyle="--")
+
+    rebuild_plot_lines()
+
+    marker_vlines: List[plt.Line2D] = []
+    marker_texts: List[plt.Text] = []
+
+    def on_key(event):
+        nonlocal current_mode, ch_idxs, scale, is_paused
+        if event.key in ('+', '='):
+            scale *= 1.25
+            rebuild_plot_lines()
+        elif event.key in ('-', '_'):
+            scale = max(5.0, scale / 1.25)
+            rebuild_plot_lines()
+        elif event.key == 'a':
+            current_mode = "all"
+            ch_idxs = select_channels_for_mode("all")
+            if scale > 40.0:
+                scale = 35.0
+            rebuild_plot_lines()
+        elif event.key == 'g':
+            current_mode = "active"
+            ch_idxs = select_channels_for_mode("active")
+            scale = 50.0
+            rebuild_plot_lines()
+        elif event.key == 'n':
+            current_mode = "nback"
+            ch_idxs = select_channels_for_mode("nback")
+            scale = 50.0
+            rebuild_plot_lines()
+        elif event.key == ' ':
+            is_paused = not is_paused
+
+    fig.canvas.mpl_connect('key_press_event', on_key)
 
     def pull_eeg() -> None:
-        nonlocal last_eeg_time
-        # Pull in chunks
-        samples, timestamps = eeg_inlet.pull_chunk(timeout=0.0, max_samples=1024)
+        samples, timestamps = eeg_inlet.pull_chunk(timeout=0.0, max_samples=2048)
         if not timestamps:
             return
         for sample, ts in zip(samples, timestamps):
             times.append(float(ts))
-            last_eeg_time = float(ts)
-            for bi, ci in enumerate(ch_idxs):
-                buffers[bi].append(float(sample[ci]))
+            for ci in range(min(n_ch, len(sample))):
+                hardware_buffers[ci].append(float(sample[ci]))
 
     def pull_markers() -> None:
+        nonlocal marker_inlet, last_marker_display
         if marker_inlet is None:
-            return
+            try:
+                found = resolve_byprop("name", args.marker_name, timeout=0.0)
+                if found:
+                    marker_inlet = StreamInlet(found[0], max_buflen=60, processing_flags=0)
+                    print(f"[live] attached to marker stream: {args.marker_name}")
+            except Exception:
+                return
+
         while True:
             sample, ts = marker_inlet.pull_sample(timeout=0.0)
             if ts is None:
@@ -225,70 +338,71 @@ def main() -> None:
             if isinstance(label, (bytes, bytearray)):
                 label = label.decode("utf-8", errors="replace")
             markers.append((float(ts), str(label)))
-            print(f"[marker] {ts:.3f}  {label}")
+            last_marker_display = str(label)
+            print(f">>> [MARKER] {label} (ts={ts:.3f})")
 
     def update(_frame):
         pull_eeg()
         pull_markers()
 
-        # Clear old artists
+        if is_paused or not times:
+            return lines
+
         while marker_vlines:
             marker_vlines.pop().remove()
         while marker_texts:
             marker_texts.pop().remove()
-
-        if not times:
-            status.set_text("waiting for EEG samples...")
-            return lines + [status]
 
         t_arr = np.asarray(times, dtype=float)
         t_end = t_arr[-1]
         t_start = t_end - window_s
         rel = t_arr - t_end
 
-        for bi, ln in enumerate(lines):
-            y = np.asarray(buffers[bi], dtype=float)
-            if y.size != rel.size:
-                n = min(y.size, rel.size)
-                ln.set_data(rel[-n:], y[-n:] + bi * args.scale)
-            else:
-                ln.set_data(rel, y + bi * args.scale)
+        rel_disp = rel[::decimate_step]
 
-        # Markers in window
-        recent = [m for m in markers if m[0] >= t_start]
-        for ts, label in recent[-12:]:
+        for bi, ci in enumerate(ch_idxs):
+            if bi >= len(lines):
+                break
+            y_raw = np.asarray(hardware_buffers[ci], dtype=float)
+            if y_raw.size == 0:
+                continue
+
+            y_centered = y_raw - np.median(y_raw)
+            y_disp = y_centered[::decimate_step]
+
+            n = min(rel_disp.size, y_disp.size)
+            if n > 0:
+                lines[bi].set_data(rel_disp[-n:], y_disp[-n:] + bi * scale)
+
+        recent = [m for m in markers if m[0] >= t_start - 0.2]
+        for ts, label in recent[-16:]:
             x = ts - t_end
-            vl = ax.axvline(x, color="crimson", alpha=0.75, lw=1.2)
+            if x < -window_s or x > 0.2:
+                continue
+            vl = ax.axvline(x, color="#d90429", alpha=0.85, lw=1.8, linestyle="--")
             marker_vlines.append(vl)
-            short = label if len(label) <= 40 else label[:37] + "..."
+
+            parts = label.split(":")
+            short = f"{parts[1]} ({parts[3]})" if len(parts) >= 4 else (label[:20] + "..." if len(label) > 20 else label)
+
             txt = ax.text(
                 x,
-                (len(ch_idxs) - 0.3) * args.scale,
+                (len(ch_idxs) - 0.3) * scale,
                 short,
                 rotation=90,
                 va="top",
                 ha="right",
-                fontsize=7,
-                color="crimson",
+                fontsize=8,
+                fontweight="bold",
+                color="#d90429",
+                bbox=dict(boxstyle="round,pad=0.2", facecolor="#ffebee", edgecolor="#d90429", alpha=0.9),
             )
             marker_texts.append(txt)
 
-        ax.set_xlim(-window_s, 0.2)
-        ymin = -args.scale * 0.8
-        ymax = args.scale * (len(ch_idxs) - 0.2)
-        ax.set_ylim(ymin, ymax)
+        return lines + marker_vlines + marker_texts
 
-        age = time.time() - t0
-        n_mark = len(recent)
-        status.set_text(
-            f"EEG {srate:.0f} Hz | ch {','.join(str(i) for i in ch_idxs)} | "
-            f"markers in view: {n_mark} | running {age:.0f}s"
-        )
-        return lines + marker_vlines + marker_texts + [status]
-
-    print("[live] window open. Close the plot window to quit.")
-    print("[live] LabRecorder can record the same streams at the same time.")
-    _anim = FuncAnimation(fig, update, interval=50, blit=False, cache_frame_data=False)
+    print("\n[live] window open. Press 'a' all, 'g' active, 'n' n-back, '+/-' scale, space pause.\n")
+    _anim = FuncAnimation(fig, update, interval=40, blit=False, cache_frame_data=False)
     plt.tight_layout()
     plt.show()
 

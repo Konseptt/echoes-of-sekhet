@@ -2,7 +2,7 @@
  * Drift guard: the browser sequence generator in index.html is a hand-maintained
  * copy of scripts/glyphmind-core.mjs (ES imports can't run over file://, which the
  * README's double-click distribution requires). Nothing forced the two copies to
- * agree — this does. It extracts index.html's genSeqBlock chain, runs it and the
+ * agree - this does. It extracts index.html's genSeqBlock chain, runs it and the
  * core module on the same seeds, and fails if any produced sequence differs.
  *
  * Run: node scripts/verify-index-sync.mjs
@@ -33,7 +33,7 @@ const SYMBOLS = [
 
 // ponytail: naive brace/bracket balance, no JS parser. Assumes no string literal in
 // these defs holds an unbalanced { } [ ( ). True today. If a future edit adds one,
-// swap this for acorn instead of hand-patching — it's the one place both copies meet.
+// swap this for acorn instead of hand-patching - it's the one place both copies meet.
 function grab(name) {
   const re = new RegExp(`(?:^|\\n)\\s*(function\\s+${name}\\s*\\(|const\\s+${name}\\s*=)`);
   const m = re.exec(html);
