@@ -78,11 +78,30 @@ for i in range(32, 40):
 NBACK_CHANNELS = [0, 1, 2, 3, 16, 17, 4, 5, 6, 7, 18, 8, 9, 19]
 
 
-def get_channel_label(i: int, short: bool = False) -> str:
+def get_channel_label(i: int, short: bool = False, stream_labels: Optional[List[str]] = None) -> str:
+    if stream_labels and i < len(stream_labels) and stream_labels[i]:
+        return stream_labels[i]
     if i in CHANNEL_CATALOG:
         name, desc = CHANNEL_CATALOG[i]
         return f"{name}" if short else f"{name} ({desc})"
     return f"Ch{i+1}"
+
+
+def extract_channel_labels(info, n_ch: int) -> List[str]:
+    """Read channel labels from the LSL stream, falling back to standard names."""
+    labels: List[str] = []
+    try:
+        channel = info.desc().child("channels").child("channel")
+        while channel and len(labels) < n_ch:
+            label = channel.child_value("label") or channel.child_value("name")
+            labels.append(str(label).strip() if label else "")
+            channel = channel.next_sibling()
+    except Exception:
+        labels = []
+
+    if len(labels) < n_ch:
+        labels.extend("" for _ in range(n_ch - len(labels)))
+    return labels[:n_ch]
 
 
 def resolve_one(prop: str, value: str, timeout: float, kind: str) -> StreamInlet:
@@ -131,11 +150,11 @@ def detect_all_active_channels(inlet: StreamInlet, n_ch: int) -> List[int]:
     """Sample a short chunk and detect channels with active variance."""
     samples, _ = inlet.pull_chunk(timeout=0.8, max_samples=1000)
     if not samples:
-        return list(range(min(32, n_ch)))
+        return list(range(n_ch))
     data = np.asarray(samples)
     stds = np.std(data, axis=0)
-    active = [i for i in range(min(32, n_ch)) if stds[i] > 0.1]
-    return active if active else list(range(min(8, n_ch)))
+    active = [i for i in range(n_ch) if i < data.shape[1] and stds[i] > 0.1]
+    return active if active else list(range(n_ch))
 
 
 def main() -> None:
@@ -186,6 +205,7 @@ def main() -> None:
     eeg_inlet = resolve_eeg(args.eeg_name, args.eeg_type, args.timeout)
     eeg_info = eeg_inlet.info()
     n_ch = eeg_info.channel_count()
+    stream_labels = extract_channel_labels(eeg_info, n_ch)
     srate = float(eeg_info.nominal_srate() or 0.0)
     if srate <= 0:
         srate = 500.0
@@ -193,7 +213,7 @@ def main() -> None:
 
     def select_channels_for_mode(mode: str) -> List[int]:
         if mode == "all":
-            return list(range(min(32, n_ch)))
+            return list(range(n_ch))
         elif mode == "active":
             return detect_all_active_channels(eeg_inlet, n_ch)
         elif mode == "nback":
@@ -203,7 +223,7 @@ def main() -> None:
                 idxs = [int(p.strip()) for p in args.channels.split(",") if p.strip()]
                 return [i for i in idxs if 0 <= i < n_ch]
             return list(range(min(4, n_ch)))
-        return list(range(min(32, n_ch)))
+        return list(range(n_ch))
 
     current_mode = args.montage
     ch_idxs = select_channels_for_mode(current_mode)
@@ -220,7 +240,7 @@ def main() -> None:
     print(f"\n[live] actiCHamp connected ({srate:.0f} Hz, {n_ch} channels)")
     print(f"[live] montage: {current_mode.upper()} ({len(ch_idxs)} channels)")
     for ci in ch_idxs:
-        print(f"  [{ci:2d}] {get_channel_label(ci)}")
+        print(f"  [{ci:2d}] {get_channel_label(ci, stream_labels=stream_labels)}")
 
     # Resolve markers
     marker_inlet: Optional[StreamInlet] = None
@@ -256,12 +276,12 @@ def main() -> None:
         ax.clear()
         lines = []
         for i, ci in enumerate(ch_idxs):
-            lbl = get_channel_label(ci, short=True)
+            lbl = get_channel_label(ci, short=True, stream_labels=stream_labels)
             (ln,) = ax.plot([], [], lw=0.9, label=lbl)
             lines.append(ln)
 
         y_ticks = [i * scale for i in range(len(ch_idxs))]
-        y_labels = [get_channel_label(ci, short=False) for ci in ch_idxs]
+        y_labels = [get_channel_label(ci, short=False, stream_labels=stream_labels) for ci in ch_idxs]
         ax.set_yticks(y_ticks)
         ax.set_yticklabels(y_labels, fontsize=8)
 
@@ -270,7 +290,7 @@ def main() -> None:
         ax.set_xlabel("Time (seconds relative to now)", fontsize=9)
         ax.set_title(
             f"actiCHamp EEG ({srate:.0f} Hz) | Montage: {current_mode.upper()} ({len(ch_idxs)} ch) | Scale: {scale:.0f} uV\n"
-            f"[Keys: 'a' All 32 | 'g' Active | 'n' N-back | '+' / '-' Scale | Space Pause]",
+            f"[Keys: 'a' All {n_ch} | 'g' Active | 'n' N-back | '+' / '-' Scale | Space Pause]",
             fontsize=10,
             pad=10
         )
@@ -401,7 +421,7 @@ def main() -> None:
 
         return lines + marker_vlines + marker_texts
 
-    print("\n[live] window open. Press 'a' all, 'g' active, 'n' n-back, '+/-' scale, space pause.\n")
+    print(f"\n[live] window open. Press 'a' all {n_ch}, 'g' active, 'n' n-back, '+/-' scale, space pause.\n")
     _anim = FuncAnimation(fig, update, interval=40, blit=False, cache_frame_data=False)
     plt.tight_layout()
     plt.show()

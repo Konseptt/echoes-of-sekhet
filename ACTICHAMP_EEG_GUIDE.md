@@ -169,7 +169,30 @@ Photodiode placement:
 
 ---
 
-## 6. Analysis notes
+## 6. Live electrode view
+
+The live viewer resolves the first LSL stream with type `EEG` automatically and
+uses the channel labels published by BrainVision LSL Connector when available.
+Its default `all` montage plots every channel advertised by the stream, so it
+works with both 32-channel and higher-channel LiveAmp configurations:
+
+```bash
+python3 scripts/live_eeg_viewer.py --montage all
+```
+
+The startup log lists every detected channel. Press `a` to return to all
+channels, `g` to detect channels with active variance, or `n` to show the
+working-memory montage. Use `--eeg-name` when more than one EEG stream is
+visible, for example:
+
+```bash
+python3 scripts/live_eeg_viewer.py --eeg-name LiveAmp --montage all
+```
+
+If the stream does not publish labels, the viewer falls back to the standard
+actiCAP 32 mapping and names additional channels `Ch33`, `Ch34`, and so on.
+
+## 7. Analysis notes
 
 ### Compact stim + response onto EEG timelines
 
@@ -212,7 +235,7 @@ A complete session should have **140 scored+warmup rows** (70 per block) and zer
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
@@ -227,7 +250,7 @@ A complete session should have **140 scored+warmup rows** (70 per block) and zer
 
 ---
 
-## 8. References
+## 9. References
 
 - [Brain Products - LSL tips & tricks](https://www.brainproducts.com/support-resources/tips-and-tricks-for-lsl/)
 - [BCI+ - LSL markers vs hardware triggers](https://bci.plus/lsl-markers-vs-hardware-triggers/)
@@ -236,7 +259,7 @@ A complete session should have **140 scored+warmup rows** (70 per block) and zer
 
 ---
 
-## 9. Operator quick checklist
+## 10. Operator quick checklist
 
 - [ ] actiCHamp connected, impedances OK  
 - [ ] BrainVision LSL Connector running, EEG stream visible  
