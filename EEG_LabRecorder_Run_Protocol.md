@@ -101,6 +101,19 @@ Do these in order. Keep all windows open until the session is done.
 
 ### Step 2. Marker bridge
 
+After BrainVision LSL Connector is running, the local game, marker bridge, and
+live viewer can be started together from the repository root:
+
+```powershell
+python scripts\run_experiment.py
+```
+
+The command checks for an EEG LSL stream first, then opens the game at
+`http://127.0.0.1:4173`, starts `GLYPHMIND_Markers`, and opens the live
+viewer. Press `Ctrl+C` in that terminal after the session to stop the local
+processes. LabRecorder is intentionally not automated: select both streams and
+click Record manually before the participant begins.
+
 **Windows:**
 
 ```bat

@@ -179,6 +179,18 @@ Optional local server if `file://` is blocked:
 python3 -m http.server 8080
 ```
 
+For the Windows EEG setup, after BrainVision LSL Connector is streaming, one
+command starts the marker bridge, game server, browser, and live EEG viewer:
+
+```powershell
+python scripts\run_experiment.py
+```
+
+The launcher stops if no LSL stream with type `EEG` is visible. LabRecorder
+must still be opened separately, refreshed, and configured to record both the
+EEG stream and `GLYPHMIND_Markers`; the launcher does not start or control
+recording files.
+
 ## Operator checklist
 
 See **[GLYPHMIND_Game_Run_Protocol.md](./GLYPHMIND_Game_Run_Protocol.md)** for the behavioral run sheet.
